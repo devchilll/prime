@@ -6,6 +6,9 @@
 
 The objective is to implement the PRIME architecture using the **Google Agent Development Kit (ADK)**. The system orchestrates a hybrid workflow combining fast, local classifiers (Layer 2) with a smart, reasoning-capable LLM (Layer 1).
 
+![PRIME Web UI](example_web_ui.png)
+*Example of the PRIME agent running in the ADK Web UI*
+
 ## Architecture
 
 The system is strictly divided into two processing layers. **Layer 2 runs before Layer 1** to minimize costs and latency.
