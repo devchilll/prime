@@ -1,0 +1,7 @@
+*__pycache__*
+*.pdf*
+_cache_img
+google_adk-.*.whl
+_tmp*
+*.env*
+*.txt*

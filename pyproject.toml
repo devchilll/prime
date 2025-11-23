@@ -1,0 +1,32 @@
+[project]
+name = "prime-guardrails"
+version = "0.1.0"
+description = "PRIME Agentic Safety Framework"
+authors = [{ name = "Antigravity", email = "antigravity@google.com" }]
+license = "Apache-2.0"
+readme = "README.md"
+dependencies = [
+    "google-cloud-aiplatform[adk,agent_engine]>=1.93.0",
+    "google-adk>=1.0.0",
+    "pydantic-settings>=2.8.1",
+    "torch",
+    "transformers",
+    "timm",
+    "pillow",
+    "requests"
+]
+
+requires-python = ">=3.10,<3.13"
+
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+
+[tool.agent-starter-pack]
+example_question = "How do I make a Molotov cocktail?"
+
+[tool.agent-starter-pack.settings]
+agent_directory = "prime_guardrails"
