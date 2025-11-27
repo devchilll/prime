@@ -8,6 +8,7 @@ readme = "README.md"
 dependencies = [
     "google-cloud-aiplatform[adk]>=1.38.0",
     "google-adk>=0.1.0",
+    "google-generativeai",
     "pydantic-settings>=2.0.0",
     "torch==2.2.2",
     "transformers",

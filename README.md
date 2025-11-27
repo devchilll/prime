@@ -97,6 +97,33 @@ The system uses the **ADK Callback Pattern** to wire components together.
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
+### Authenticate with Google Cloud
+Since this agent uses Vertex AI, you need to authenticate with Google Cloud:
+
+1. **Install Google Cloud SDK** (if not already installed):
+   ```bash
+   # macOS
+   brew install google-cloud-sdk
+   
+   # Or download from: https://cloud.google.com/sdk/docs/install
+   ```
+
+2. **Authenticate**:
+   ```bash
+   gcloud auth login
+   gcloud auth application-default login
+   ```
+
+3. **Set your project** (replace with your actual project ID):
+   ```bash
+   gcloud config set project your-project-id
+   ```
+
+4. **Verify authentication**:
+   ```bash
+   gcloud auth list
+   ```
+
 ### Install Dependencies
 ```bash
 uv sync

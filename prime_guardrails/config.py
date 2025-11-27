@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class AgentModel(BaseModel):
     """Agent model settings."""
     name: str = Field(default="prime_safety_router")
-    model: str = Field(default="gemini-2.0-flash")
+    model: str = Field(default="gemini-2.5-flash") # todo: what model to use?
 
 class Config(BaseSettings):
     """Configuration settings for the PRIME agent."""
