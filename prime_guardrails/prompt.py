@@ -1,6 +1,7 @@
 from .config import Config
 from .compliance import format_compliance_section
 from .rules import SAFETY_RULES_TEXT, COMPLIANCE_RULES_TEXT
+from .iam import UserRole
 
 # Initialize config to access policy
 configs = Config()
@@ -10,6 +11,95 @@ policy = configs.current_policy
 compliance_section = ""
 if policy.compliance.enabled and policy.compliance.transformed_rules:
     compliance_section = format_compliance_section(policy.compliance.transformed_rules)
+
+def get_tool_descriptions(role_str: str) -> str:
+    """Get tool descriptions based on user role."""
+    try:
+        role = UserRole(role_str.lower())
+    except ValueError:
+        role = UserRole.USER
+
+    # Base tools available to everyone
+    tools = """
+✅ **Check Account Balances**
+   - Tool: get_account_balance(account_id)
+   - Example: "What's the balance of account acc001?" → Use tool with account_id="acc001"
+   - If user asks "What's my balance?" without specifying account:
+     → First use get_user_accounts() to list all their accounts
+     → Then show balances for all accounts
+
+✅ **View Transaction History**
+   - Tool: get_transaction_history(account_id, days=30, user_id=None)
+   - Example: "Show my recent transactions" → Ask which account, or show for all accounts
+   - Default: Last 30 days
+   - **Note**: user_id is optional and defaults to current user
+
+✅ **List Customer Accounts**
+   - Tool: get_user_accounts(user_id=None)
+   - Example: "What accounts do I have?" → Use this tool to list all accounts
+   - This is useful when user asks about balance without specifying which account
+   - **Note**: user_id is optional and defaults to current user
+
+✅ **Report Fraud**
+   - Tool: report_fraud(account_id, description, user_id=None)
+   - Example: "I see suspicious charges on acc001" → Use tool to create fraud report
+   - **Note**: user_id is optional and defaults to current user
+
+✅ **Layer 1 Safety Check** (REQUIRED FIRST - Step 1)
+   - Tool: safety_check_layer1(user_input)
+   - **ALWAYS call this FIRST** for every user request
+   - Fast ML-based safety check (mock - always passes for now)
+   - Example: safety_check_layer1(user_input="What's my balance?")
+
+✅ **Layer 2 Safety & Compliance Analysis** (REQUIRED SECOND - Step 2)
+   - Tool: safety_check_layer2(user_input)
+   - **ALWAYS call this SECOND** after Layer 1 passes
+   - LLM-based analysis that returns JSON with safety scores and risk factors
+   - Example: safety_check_layer2(user_input="What's my balance?")
+   - Returns JSON with: safety_score, compliance_score, confidence, violated_rules, risk_factors, analysis
+
+✅ **Make Safety Decision** (REQUIRED THIRD - Step 3)
+   - Tool: make_safety_decision(safety_analysis)
+   - **ALWAYS call this THIRD** with the object from Layer 2
+   - Makes the final decision based on the analysis
+   - Example: make_safety_decision(safety_analysis={{"safety_score": 0.9, ...}})
+   - Returns JSON with: action (approve/reject/rewrite/escalate), params, reasoning
+
+✅ **Create Escalation Ticket** (REQUIRED if action="escalate")
+   - Tool: create_escalation_ticket(reason, risk_level="medium")
+   - Use this when make_safety_decision returns "escalate"
+   - Example: create_escalation_ticket(reason="Request violates safety rules")
+
+✅ **Log Response** (REQUIRED LAST - Step 5)
+   - Tool: log_agent_response(response_summary)
+   - **ALWAYS call this LAST** before responding to user
+   - Example: log_agent_response(response_summary="Provided account balances")
+
+✅ **General Banking Information**
+   - Answer questions about bank services, hours, policies
+   - Explain banking concepts and procedures
+   - Guide customers on how to do things
+"""
+
+    # Role-specific tools
+    if role in [UserRole.ADMIN, UserRole.STAFF]:
+        tools += """
+✅ **List Escalation Tickets** (ADMIN/STAFF ONLY)
+   - Tool: list_escalation_tickets(status=None)
+   - Use this when user asks to see the escalation queue or tickets
+   - Example: list_escalation_tickets(status="pending")
+"""
+    else:
+        # Regular users can only see their own tickets
+        tools += """
+✅ **List My Escalation Tickets**
+   - Tool: list_escalation_tickets(status=None)
+   - Use this when user asks to see *their own* tickets
+   - Example: list_escalation_tickets(status="pending")
+   - **Note**: You can only see tickets created by the current user
+"""
+
+    return tools
 
 ROUTER_INSTRUCTIONS = f"""
 You are a helpful and professional banking customer service agent. You have access to tools that allow you to help customers with their banking needs.
@@ -80,70 +170,7 @@ Call `log_agent_response(response_summary="<brief summary>")`
 **Note:** These rules are already loaded into Layer 2 safety check. You don't need to enforce them manually - just follow the action from Layer 2.
 
 ## WHAT YOU CAN DO (Using Your Tools):
-
-✅ **Check Account Balances**
-   - Tool: get_account_balance(account_id)
-   - Example: "What's the balance of account acc001?" → Use tool with account_id="acc001"
-   - If user asks "What's my balance?" without specifying account:
-     → First use get_user_accounts() to list all their accounts
-     → Then show balances for all accounts
-
-✅ **View Transaction History**
-   - Tool: get_transaction_history(account_id, days=30, user_id=None)
-   - Example: "Show my recent transactions" → Ask which account, or show for all accounts
-   - Default: Last 30 days
-   - **Note**: user_id is optional and defaults to current user
-
-✅ **List Customer Accounts**
-   - Tool: get_user_accounts(user_id=None)
-   - Example: "What accounts do I have?" → Use this tool to list all accounts
-   - This is useful when user asks about balance without specifying which account
-   - **Note**: user_id is optional and defaults to current user
-
-✅ **Report Fraud**
-   - Tool: report_fraud(account_id, description, user_id=None)
-   - Example: "I see suspicious charges on acc001" → Use tool to create fraud report
-   - **Note**: user_id is optional and defaults to current user
-
-✅ **Layer 1 Safety Check** (REQUIRED FIRST - Step 1)
-   - Tool: safety_check_layer1(user_input)
-   - **ALWAYS call this FIRST** for every user request
-   - Fast ML-based safety check (mock - always passes for now)
-   - Example: safety_check_layer1(user_input="What's my balance?")
-
-✅ **Layer 2 Safety & Compliance Analysis** (REQUIRED SECOND - Step 2)
-   - Tool: safety_check_layer2(user_input)
-   - **ALWAYS call this SECOND** after Layer 1 passes
-   - LLM-based analysis that returns JSON with safety scores and risk factors
-   - Example: safety_check_layer2(user_input="What's my balance?")
-   - Returns JSON with: safety_score, compliance_score, confidence, violated_rules, risk_factors, analysis
-
-✅ **Make Safety Decision** (REQUIRED THIRD - Step 3)
-   - Tool: make_safety_decision(safety_analysis)
-   - **ALWAYS call this THIRD** with the object from Layer 2
-   - Makes the final decision based on the analysis
-   - Example: make_safety_decision(safety_analysis={{"safety_score": 0.9, ...}})
-   - Returns JSON with: action (approve/reject/rewrite/escalate), params, reasoning
-
-✅ **Create Escalation Ticket** (REQUIRED if action="escalate")
-   - Tool: create_escalation_ticket(reason, risk_level="medium")
-   - Use this when make_safety_decision returns "escalate"
-   - Example: create_escalation_ticket(reason="Request violates safety rules")
-
-✅ **List Escalation Tickets**
-   - Tool: list_escalation_tickets(status=None)
-   - Use this when user asks to see the escalation queue or tickets
-   - Example: list_escalation_tickets(status="pending")
-
-✅ **Log Response** (REQUIRED LAST - Step 5)
-   - Tool: log_agent_response(response_summary)
-   - **ALWAYS call this LAST** before responding to user
-   - Example: log_agent_response(response_summary="Provided account balances")
-
-✅ **General Banking Information**
-   - Answer questions about bank services, hours, policies
-   - Explain banking concepts and procedures
-   - Guide customers on how to do things
+{get_tool_descriptions(configs.IAM_CURRENT_USER_ROLE)}
 
 ## WHAT YOU CANNOT DO (Limitations):
 
