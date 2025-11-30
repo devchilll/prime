@@ -63,7 +63,8 @@ class AuditLogger:
         action: str,
         details: Optional[Dict[str, Any]] = None,
         success: bool = True,
-        error: Optional[str] = None
+        error: Optional[str] = None,
+        session_id: Optional[str] = None
     ):
         """Log an audit event.
         
@@ -74,6 +75,7 @@ class AuditLogger:
             details: Additional event details
             success: Whether the action succeeded
             error: Error message if action failed
+            session_id: Optional session ID to group related events
         """
         event = {
             "timestamp": datetime.now().isoformat(),
@@ -83,6 +85,9 @@ class AuditLogger:
             "success": success,
             "details": details or {},
         }
+        
+        if session_id:
+            event["session_id"] = session_id
         
         if error:
             event["error"] = error

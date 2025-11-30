@@ -101,10 +101,39 @@ def has_permission(role: UserRole, permission: Permission) -> bool:
     """Check if a role has a specific permission.
     
     Args:
-        role: User role
-        permission: Permission to check
+        role: User role to check
+        permission: Permission to check for
         
     Returns:
-        True if role has permission
+        True if role has permission, False otherwise
     """
     return permission in get_permissions(role)
+
+
+def get_role_description(role: UserRole) -> str:
+    """Get a human-readable description of what a role can do.
+    
+    Args:
+        role: User role to describe
+        
+    Returns:
+        Description of the role's capabilities
+    """
+    descriptions = {
+        UserRole.USER: "Regular customer, can only access their own data (accounts, transactions, escalations)",
+        UserRole.STAFF: "Bank employee, authorized to view customer data and all escalation tickets for support purposes",
+        UserRole.ADMIN: "Administrator, full access to all systems, data, and can resolve escalations and modify configurations",
+        UserRole.SYSTEM: "Internal system operations, full access to all functions"
+    }
+    return descriptions.get(role, "Unknown role")
+
+
+def get_all_role_descriptions() -> str:
+    """Get formatted descriptions of all roles for prompts.
+    
+    Returns:
+        Formatted string with all role descriptions
+    """
+    return """- **USER** role: Regular customer, can only access their own data (accounts, transactions, escalations)
+- **STAFF** role: Bank employee, authorized to view customer data and all escalation tickets for support purposes
+- **ADMIN** role: Administrator, full access to all systems, data, and can resolve escalations and modify configurations"""

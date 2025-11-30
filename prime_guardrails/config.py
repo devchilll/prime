@@ -121,9 +121,9 @@ class Config(BaseSettings):
     IAM_SESSION_TIMEOUT_MINUTES: int = Field(default=60)
     
     # Current user for testing
-    IAM_CURRENT_USER_ROLE: str = Field(default="USER")
-    IAM_CURRENT_USER_ID: str = Field(default="user")
-    IAM_CURRENT_USER_NAME: str = Field(default="Test User")
+    IAM_CURRENT_USER_ROLE: str = Field(default="STAFF")
+    IAM_CURRENT_USER_ID: str = Field(default="staff")
+    IAM_CURRENT_USER_NAME: str = Field(default="Bob Smith")
 
     # Escalation Pillar 4: Escalation Configuration
     ESCALATION_ENABLED: bool = Field(default=True)

@@ -15,7 +15,7 @@ from .logging import get_audit_logger, AuditEventType
 from .config import Config
 from .rules import SAFETY_RULES_TEXT, COMPLIANCE_RULES_TEXT
 from .escalation import EscalationQueue, EscalationTicket
-
+from .iam import User as IAMUser, UserRole, get_all_role_descriptions
 # Initialize logger and config
 audit_logger = get_audit_logger()
 config = Config()
@@ -91,6 +91,14 @@ def safety_check_layer2(user_input: str) -> str:
 
 Your job is to analyze user requests against safety and compliance rules and provide a detailed assessment.
 
+## CURRENT USER CONTEXT:
+- User ID: {config.IAM_CURRENT_USER_ID}
+- User Role: {config.IAM_CURRENT_USER_ROLE}
+- User Name: {config.IAM_CURRENT_USER_NAME}
+
+**IMPORTANT**: Consider the user's role when analyzing the request:
+{get_all_role_descriptions()}
+
 ## SAFETY RULES:
 {SAFETY_RULES_TEXT}
 
@@ -102,6 +110,7 @@ Your job is to analyze user requests against safety and compliance rules and pro
 
 ## YOUR TASK:
 Analyze the user request against the safety and compliance rules above.
+**CRITICAL**: If the user has STAFF or ADMIN role, requests to view escalation tickets, customer data, or administrative functions are LEGITIMATE and should have HIGH safety scores.
 Return a JSON object with your analysis. DO NOT make a decision (approve/reject/etc), just analyze.
 
 ## OUTPUT FORMAT (JSON):
@@ -195,11 +204,20 @@ def make_safe_and_compliant_decision(safety_analysis: dict) -> str:
 
 You receive safety analysis results and must make a verdict on how to proceed.
 
+## CURRENT USER CONTEXT:
+- User ID: {config.IAM_CURRENT_USER_ID}
+- User Role: {config.IAM_CURRENT_USER_ROLE}
+- User Name: {config.IAM_CURRENT_USER_NAME}
+
+**IMPORTANT**: Consider the user's role when making decisions:
+{get_all_role_descriptions()}
+- Requests from STAFF/ADMIN that would be violations for regular users are APPROVED for them
+
 ## SAFETY ANALYSIS RESULTS:
 {json.dumps(safety_analysis, indent=2)}
 
 ## YOUR TASK:
-Based on the safety analysis above, decide what action to take.
+Based on the safety analysis above AND the user's role, decide what action to take.
 
 ## OUTPUT FORMAT (JSON):
 {{
@@ -344,11 +362,15 @@ def list_escalation_tickets(status: Optional[str] = None) -> str:
         ticket_list = []
         for t in tickets:
             ticket_list.append({
-                "id": t.ticket_id,
+                "id": t.id,
+                "user_id": t.user_id,
                 "status": t.status,
-                "risk": t.risk_level,
-                "reason": t.reason,
-                "created": t.created_at.isoformat() if t.created_at else None
+                "input_text": t.input_text,
+                "agent_reasoning": t.agent_reasoning,
+                "confidence": t.confidence,
+                "created_at": t.created_at.isoformat() if hasattr(t.created_at, 'isoformat') else str(t.created_at),
+                "resolved_by": t.resolved_by,
+                "resolution_note": t.resolution_note
             })
             
         return json.dumps(ticket_list, indent=2)
