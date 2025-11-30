@@ -413,6 +413,80 @@ def log_agent_response(response_summary: str, full_response: str = "", model_use
         return f"⚠️ Failed to log response: {str(e)}"
 
 
+def view_audit_logs(limit: int = 50, event_type: Optional[str] = None) -> str:
+    """View recent audit log entries (ADMIN/STAFF only).
+    
+    This tool allows administrators and staff to view recent audit log entries
+    for compliance, security monitoring, and troubleshooting.
+    
+    Args:
+        limit: Maximum number of log entries to return (default: 50, max: 200)
+        event_type: Optional filter by event type (e.g., "user_query", "account_access")
+        
+    Returns:
+        JSON string with recent audit log entries
+    """
+    # Check permissions
+    try:
+        current_user = IAMUser(
+            user_id=config.IAM_CURRENT_USER_ID,
+            role=UserRole[config.IAM_CURRENT_USER_ROLE],
+            name=config.IAM_CURRENT_USER_NAME
+        )
+        
+        # Only ADMIN and STAFF can view logs
+        if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
+            return json.dumps({
+                "error": "Permission denied",
+                "message": "Only ADMIN and STAFF users can view audit logs"
+            })
+        
+        # Limit the number of entries
+        limit = min(limit, 200)
+        
+        # Read the most recent log file
+        log_dir = audit_logger.log_dir
+        log_files = sorted(log_dir.glob("audit_*.jsonl"), reverse=True)
+        
+        if not log_files:
+            return json.dumps({"entries": [], "message": "No audit logs found"})
+        
+        # Read entries from the most recent file
+        entries = []
+        with open(log_files[0], 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    entry = json.loads(line)
+                    
+                    # Filter by event type if specified
+                    if event_type and entry.get('event_type') != event_type:
+                        continue
+                    
+                    entries.append(entry)
+                    
+                    if len(entries) >= limit:
+                        break
+                except json.JSONDecodeError:
+                    continue
+        
+        # Return the most recent entries (reverse order - newest first)
+        entries.reverse()
+        
+        return json.dumps({
+            "entries": entries[:limit],
+            "count": len(entries),
+            "log_file": str(log_files[0].name)
+        }, indent=2)
+        
+    except Exception as e:
+        return json.dumps({
+            "error": "Failed to retrieve audit logs",
+            "message": str(e)
+        })
+
+
 # Export tools
 OBSERVABILITY_TOOLS = [
     safety_check_layer1,
@@ -421,4 +495,5 @@ OBSERVABILITY_TOOLS = [
     create_escalation_ticket,
     list_escalation_tickets,
     log_agent_response,
+    view_audit_logs
 ]

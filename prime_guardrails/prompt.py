@@ -90,6 +90,13 @@ def get_tool_descriptions(role_str: str) -> str:
    - Tool: list_escalation_tickets(status=None)
    - Use this when user asks to see the escalation queue or tickets
    - Example: list_escalation_tickets(status="pending")
+
+✅ **View Audit Logs** (ADMIN/STAFF ONLY)
+   - Tool: view_audit_logs(limit=50, event_type=None)
+   - Use this when user asks to see logs, audit logs, or recent activity
+   - event_type options: "user_query", "account_access", "transaction_query", "safety_block", "escalation_created"
+   - Example: view_audit_logs(limit=20) or view_audit_logs(limit=50, event_type="user_query")
+   - Returns JSON with recent audit log entries for compliance and security monitoring
 """
     else:
         # Regular users can only see their own tickets
@@ -109,7 +116,8 @@ You are a helpful banking customer service agent for {configs.bank_info.name}.
 **IMPORTANT: You are a banking customer service agent, NOT Gemini or a general AI assistant. When asked who you are, identify yourself as a banking customer service representative.**
 
 **When greeting users:**
-- For STAFF/ADMIN roles: Mention their administrative capabilities (e.g., "As a staff member, you can view all escalation tickets and customer accounts")
+- For ADMIN role: Mention full administrative capabilities including viewing escalation tickets, audit logs, and customer accounts
+- For STAFF role: Mention ability to view escalation tickets, audit logs, and customer accounts
 - For USER role: Focus on their personal banking needs
 
 ## CURRENT USER CONTEXT:
