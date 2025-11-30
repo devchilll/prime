@@ -413,18 +413,18 @@ def log_agent_response(response_summary: str, full_response: str = "", model_use
         return f"⚠️ Failed to log response: {str(e)}"
 
 
-def view_audit_logs(limit: int = 50, event_type: Optional[str] = None) -> str:
+def view_audit_logs(limit: int = 10, event_type: Optional[str] = None) -> str:
     """View recent audit log entries (ADMIN/STAFF only).
     
     This tool allows administrators and staff to view recent audit log entries
     for compliance, security monitoring, and troubleshooting.
     
     Args:
-        limit: Maximum number of log entries to return (default: 50, max: 200)
+        limit: Maximum number of log entries to return (default: 10, max: 200)
         event_type: Optional filter by event type (e.g., "user_query", "account_access")
         
     Returns:
-        JSON string with recent audit log entries
+        Formatted string with recent audit log entries
     """
     # Check permissions
     try:
@@ -436,10 +436,7 @@ def view_audit_logs(limit: int = 50, event_type: Optional[str] = None) -> str:
         
         # Only ADMIN and STAFF can view logs
         if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
-            return json.dumps({
-                "error": "Permission denied",
-                "message": "Only ADMIN and STAFF users can view audit logs"
-            })
+            return "❌ Permission denied: Only ADMIN and STAFF users can view audit logs"
         
         # Limit the number of entries
         limit = min(limit, 200)
@@ -449,7 +446,7 @@ def view_audit_logs(limit: int = 50, event_type: Optional[str] = None) -> str:
         log_files = sorted(log_dir.glob("audit_*.jsonl"), reverse=True)
         
         if not log_files:
-            return json.dumps({"entries": [], "message": "No audit logs found"})
+            return "📋 No audit logs found"
         
         # Read entries from the most recent file
         entries = []
@@ -474,17 +471,55 @@ def view_audit_logs(limit: int = 50, event_type: Optional[str] = None) -> str:
         # Return the most recent entries (reverse order - newest first)
         entries.reverse()
         
-        return json.dumps({
-            "entries": entries[:limit],
-            "count": len(entries),
-            "log_file": str(log_files[0].name)
-        }, indent=2)
+        if not entries:
+            if event_type:
+                return f"📋 No audit logs found for event type: {event_type}"
+            return "📋 No audit logs found"
+        
+        # Format the output in a user-friendly way
+        output = f"📊 **Audit Log Entries** (showing {len(entries)} of recent activity)\n"
+        output += f"📁 Log file: {log_files[0].name}\n\n"
+        
+        for i, entry in enumerate(entries, 1):
+            timestamp = entry.get('timestamp', 'N/A')
+            event_type_val = entry.get('event_type', 'N/A')
+            user_id = entry.get('user_id', 'N/A')
+            action = entry.get('action', 'N/A')
+            success = entry.get('success', True)
+            details = entry.get('details', {})
+            
+            # Format timestamp to be more readable
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(timestamp)
+                time_str = dt.strftime("%H:%M:%S")
+            except:
+                time_str = timestamp
+            
+            # Status icon
+            status_icon = "✅" if success else "❌"
+            
+            # Build entry line
+            output += f"{i}. [{time_str}] {status_icon} **{action}**\n"
+            output += f"   User: {user_id} | Type: {event_type_val}\n"
+            
+            # Add relevant details
+            if 'model' in details:
+                output += f"   Model: {details['model']}\n"
+            if 'input' in details:
+                input_text = details['input'][:100] + "..." if len(details['input']) > 100 else details['input']
+                output += f"   Input: \"{input_text}\"\n"
+            if 'summary' in details:
+                output += f"   Summary: {details['summary']}\n"
+            if 'error' in entry:
+                output += f"   ⚠️ Error: {entry['error']}\n"
+            
+            output += "\n"
+        
+        return output
         
     except Exception as e:
-        return json.dumps({
-            "error": "Failed to retrieve audit logs",
-            "message": str(e)
-        })
+        return f"❌ Failed to retrieve audit logs: {str(e)}"
 
 
 # Export tools

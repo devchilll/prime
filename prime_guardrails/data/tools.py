@@ -152,9 +152,11 @@ def get_user_accounts(user_id: Optional[str] = None) -> str:
     """
     try:
         # Get current user from config if user_id not provided
+        current_iam_user = get_current_user()
+        is_current_user = (user_id is None)
+        
         if user_id is None:
-            iam_user = get_current_user()
-            user_id = iam_user.user_id
+            user_id = current_iam_user.user_id
         
         # Get user's accounts
         accounts = db.get_user_accounts(user_id)
@@ -165,13 +167,17 @@ def get_user_accounts(user_id: Optional[str] = None) -> str:
         # Log account access
         audit_logger.log_event(
             event_type=AuditEventType.ACCOUNT_ACCESS,
-            user_id=user_id,
+            user_id=current_iam_user.user_id,
             action="list_accounts",
-            details={"account_count": len(accounts)}
+            details={"account_count": len(accounts), "target_user": user_id}
         )
         
-        # Format accounts
-        result = f"Your accounts:\n\n"
+        # Format accounts with appropriate wording
+        if is_current_user:
+            result = f"Your accounts:\n\n"
+        else:
+            result = f"Accounts for user '{user_id}':\n\n"
+        
         total_balance = 0.0
         
         for acc in accounts:

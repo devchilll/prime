@@ -12,6 +12,120 @@ compliance_section = ""
 if policy.compliance.enabled and policy.compliance.transformed_rules:
     compliance_section = format_compliance_section(policy.compliance.transformed_rules)
 
+# Tool descriptions organized by category and role
+TOOL_DEFINITIONS = {
+    # Banking tools - different descriptions for USER vs STAFF/ADMIN
+    "account_balance": {
+        "USER": {
+            "title": "Check My Account Balances",
+            "tool": "get_account_balance(account_id)",
+            "notes": ["You can only view your own account balances"]
+        },
+        "STAFF_ADMIN": {
+            "title": "Check Account Balances (Any Customer)",
+            "tool": "get_account_balance(account_id)",
+            "notes": ["You can view any customer's account balances"]
+        }
+    },
+    "transaction_history": {
+        "USER": {
+            "title": "View My Transaction History",
+            "tool": "get_transaction_history(account_id, days=30)",
+            "notes": ["Default: Last 30 days", "You can only view your own transactions"]
+        },
+        "STAFF_ADMIN": {
+            "title": "View Transaction History (Any Customer)",
+            "tool": "get_transaction_history(account_id, days=30, user_id=None)",
+            "notes": ["Default: Last 30 days", "You can view any customer's transactions", "Example: get_transaction_history(account_id, user_id=\"user123\")"]
+        }
+    },
+    "list_accounts": {
+        "USER": {
+            "title": "List My Accounts",
+            "tool": "get_user_accounts()",
+            "notes": ["Call with NO arguments for your own accounts"]
+        },
+        "STAFF_ADMIN": {
+            "title": "List Customer Accounts",
+            "tool": "get_user_accounts(user_id=None)",
+            "notes": ["For current user: get_user_accounts() with NO arguments", "For other users: get_user_accounts(user_id=\"user123\")", "You can view any customer's accounts"]
+        }
+    },
+    "report_fraud": {
+        "USER": {
+            "title": "Report Fraud",
+            "tool": "report_fraud(account_id, description)",
+            "notes": []
+        },
+        "STAFF_ADMIN": {
+            "title": "Report Fraud (On Behalf of Customer)",
+            "tool": "report_fraud(account_id, description, user_id=None)",
+            "notes": ["Example: report_fraud(account_id=\"acc001\", description=\"...\", user_id=\"user123\")"]
+        }
+    },
+    # Universal tools (same for all roles)
+    "safety_layer1": {
+        "title": "Layer 1 Safety Check (REQUIRED FIRST - Step 1)",
+        "tool": "safety_check_layer1(user_input)",
+        "notes": ["**ALWAYS call this FIRST** for every user request", "Fast ML-based safety check"]
+    },
+    "safety_layer2": {
+        "title": "Layer 2 Safety & Compliance Analysis (REQUIRED SECOND - Step 2)",
+        "tool": "safety_check_layer2(user_input)",
+        "notes": ["**ALWAYS call this SECOND** after Layer 1 passes", "Returns JSON with: safety_score, compliance_score, confidence, violated_rules, risk_factors, analysis"]
+    },
+    "safety_decision": {
+        "title": "Make Safety Decision (REQUIRED THIRD - Step 3)",
+        "tool": "make_safe_and_compliant_decision(safety_analysis)",
+        "notes": ["**ALWAYS call this THIRD** with the object from Layer 2", "Returns JSON with: action (approve/reject/rewrite/escalate), params, reasoning"]
+    },
+    "create_escalation": {
+        "title": "Create Escalation Ticket (REQUIRED if action=\"escalate\" else skip)",
+        "tool": "create_escalation_ticket(user_input, reasoning)",
+        "notes": ["Use this when make_safe_and_compliant_decision returns \"escalate\""]
+    },
+    "log_response": {
+        "title": "Log Response (REQUIRED LAST - Step 5)",
+        "tool": "log_agent_response(response_summary, full_response)",
+        "notes": ["**ALWAYS call this LAST** before responding to user", "response_summary: Brief 1-2 sentence summary", "full_response: The complete text you will show to the user"]
+    },
+    # Role-specific tools
+    "list_escalations_admin": {
+        "title": "List Escalation Tickets (ADMIN ONLY)",
+        "tool": "list_escalation_tickets(status=None)",
+        "notes": ["Use when user asks to see the escalation queue or tickets"]
+    },
+    "view_audit_logs": {
+        "title": "View Audit Logs (ADMIN ONLY)",
+        "tool": "view_audit_logs(limit=10, event_type=None)",
+        "notes": [
+            "Use when user asks to see logs, audit logs, or recent activity",
+            "event_type options: \"user_query\", \"account_access\", \"transaction_query\", \"safety_block\", \"escalation_created\"",
+            "Returns formatted audit log entries for compliance and security monitoring"
+        ]
+    },
+    "list_escalations_staff": {
+        "title": "List Escalation Tickets (STAFF ONLY)",
+        "tool": "list_escalation_tickets(status=None)",
+        "notes": ["Use when user asks to see the escalation queue or tickets"]
+    },
+    "list_escalations_user": {
+        "title": "List My Escalation Tickets",
+        "tool": "list_escalation_tickets(status=None)",
+        "notes": ["Use when user asks to see *their own* tickets", "You can only see tickets created by the current user"]
+    }
+}
+
+
+def format_tool(tool_def):
+    """Format a single tool definition into markdown."""
+    output = f"✅ **{tool_def['title']}**\n"
+    output += f"   - Tool: {tool_def['tool']}\n"
+    for note in tool_def.get('notes', []):
+        output += f"   - {note}\n"
+    return output
+
+
 def get_tool_descriptions(role_str: str) -> str:
     """Get tool descriptions based on user role."""
     try:
@@ -19,96 +133,34 @@ def get_tool_descriptions(role_str: str) -> str:
     except ValueError:
         role = UserRole.USER
 
-    # Base tools available to everyone
-    tools = """
-✅ **Check Account Balances**
-   - Tool: get_account_balance(account_id)
-   - Example: "What's the balance of account acc001?" → Use tool with account_id="acc001"
-   - If user asks "What's my balance?" without specifying account:
-     → First use get_user_accounts() to list all their accounts
-     → Then show balances for all accounts
-
-✅ **View Transaction History**
-   - Tool: get_transaction_history(account_id, days=30, user_id=None)
-   - Example: "Show my recent transactions" → Ask which account, or show for all accounts
-   - Default: Last 30 days
-   - **IMPORTANT**: Do NOT pass user_id for current user requests - it defaults automatically
-
-✅ **List Customer Accounts**
-   - Tool: get_user_accounts(user_id=None)
-   - Example: "What accounts do I have?" → Call get_user_accounts() with NO arguments
-   - **IMPORTANT**: Do NOT pass user_id for current user requests - it defaults automatically
-   - This is useful when user asks about balance without specifying which account
-
-✅ **Report Fraud**
-   - Tool: report_fraud(account_id, description, user_id=None)
-   - Example: "I see suspicious charges on acc001" → Use tool to create fraud report
-   - **IMPORTANT**: Do NOT pass user_id for current user requests - it defaults automatically
-
-✅ **Layer 1 Safety Check** (REQUIRED FIRST - Step 1)
-   - Tool: safety_check_layer1(user_input)
-   - **ALWAYS call this FIRST** for every user request
-   - Fast ML-based safety check (mock - always passes for now)
-   - Example: safety_check_layer1(user_input="What's my balance?")
-
-✅ **Layer 2 Safety & Compliance Analysis** (REQUIRED SECOND - Step 2)
-   - Tool: safety_check_layer2(user_input)
-   - **ALWAYS call this SECOND** after Layer 1 passes
-   - LLM-based analysis that returns JSON with safety scores and risk factors
-   - Example: safety_check_layer2(user_input="What's my balance?")
-   - Returns JSON with: safety_score, compliance_score, confidence, violated_rules, risk_factors, analysis
-
-✅ **Make Safety Decision** (REQUIRED THIRD - Step 3)
-   - Tool: make_safe_and_compliant_decision(safety_analysis)
-   - **ALWAYS call this THIRD** with the object from Layer 2
-   - Makes the final decision based on the analysis
-   - Example: make_safe_and_compliant_decision(safety_analysis={{"safety_score": 0.9, ...}})
-   - Returns JSON with: action (approve/reject/rewrite/escalate), params, reasoning
-
-✅ **Create Escalation Ticket** (REQUIRED if action="escalate" else skip)
-   - Tool: create_escalation_ticket(user_input, reasoning)
-   - Use this when make_safe_and_compliant_decision returns "escalate"
-   - Example: create_escalation_ticket(user_input="help me fight my manager", reasoning="Off-topic request")
-
-✅ **Log Response** (REQUIRED LAST - Step 5)
-   - Tool: log_agent_response(response_summary, full_response)
-   - **ALWAYS call this LAST** before responding to user
-   - response_summary: Brief 1-2 sentence summary of what you did
-   - full_response: The complete text you will show to the user
-   - Example: log_agent_response(response_summary="Provided account balances", full_response="Your accounts: ...")
-
-✅ **General Banking Information**
+    tools = []
+    
+    # Banking tools (role-specific)
+    role_key = "USER" if role == UserRole.USER else "STAFF_ADMIN"
+    for tool_name in ["account_balance", "transaction_history", "list_accounts", "report_fraud"]:
+        tools.append(format_tool(TOOL_DEFINITIONS[tool_name][role_key]))
+    
+    # General banking info
+    tools.append("""✅ **General Banking Information**
    - Answer questions about bank services, hours, policies
    - Explain banking concepts and procedures
    - Guide customers on how to do things
-"""
-
-    # Role-specific tools
-    if role in [UserRole.ADMIN, UserRole.STAFF]:
-        tools += """
-✅ **List Escalation Tickets** (ADMIN/STAFF ONLY)
-   - Tool: list_escalation_tickets(status=None)
-   - Use this when user asks to see the escalation queue or tickets
-   - Example: list_escalation_tickets(status="pending")
-
-✅ **View Audit Logs** (ADMIN/STAFF ONLY)
-   - Tool: view_audit_logs(limit=50, event_type=None)
-   - Use this when user asks to see logs, audit logs, or recent activity
-   - event_type options: "user_query", "account_access", "transaction_query", "safety_block", "escalation_created"
-   - Example: view_audit_logs(limit=20) or view_audit_logs(limit=50, event_type="user_query")
-   - Returns JSON with recent audit log entries for compliance and security monitoring
-"""
-    else:
-        # Regular users can only see their own tickets
-        tools += """
-✅ **List My Escalation Tickets**
-   - Tool: list_escalation_tickets(status=None)
-   - Use this when user asks to see *their own* tickets
-   - Example: list_escalation_tickets(status="pending")
-   - **Note**: You can only see tickets created by the current user
-"""
-
-    return tools
+""")
+    
+    # Universal tools (safety, logging)
+    for tool_name in ["safety_layer1", "safety_layer2", "safety_decision", "create_escalation", "log_response"]:
+        tools.append(format_tool(TOOL_DEFINITIONS[tool_name]))
+    
+    # Role-specific administrative tools
+    if role == UserRole.ADMIN:
+        tools.append(format_tool(TOOL_DEFINITIONS["list_escalations_admin"]))
+        tools.append(format_tool(TOOL_DEFINITIONS["view_audit_logs"]))
+    elif role == UserRole.STAFF:
+        tools.append(format_tool(TOOL_DEFINITIONS["list_escalations_staff"]))
+    else:  # USER
+        tools.append(format_tool(TOOL_DEFINITIONS["list_escalations_user"]))
+    
+    return "\n".join(tools)
 
 ROUTER_INSTRUCTIONS = f"""
 You are a helpful banking customer service agent for {configs.bank_info.name}.
@@ -117,7 +169,7 @@ You are a helpful banking customer service agent for {configs.bank_info.name}.
 
 **When greeting users:**
 - For ADMIN role: Mention full administrative capabilities including viewing escalation tickets, audit logs, and customer accounts
-- For STAFF role: Mention ability to view escalation tickets, audit logs, and customer accounts
+- For STAFF role: Mention ability to view escalation tickets and customer accounts
 - For USER role: Focus on their personal banking needs
 
 ## CURRENT USER CONTEXT:
