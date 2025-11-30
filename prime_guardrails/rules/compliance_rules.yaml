@@ -1,0 +1,85 @@
+# PRIME Compliance Rules Configuration
+# These rules define business and regulatory compliance requirements
+
+compliance_rules:
+  # Rule ID: COMP-001
+  - id: "COMP-001"
+    category: "data_privacy"
+    description: "Never share full account numbers - only last 4 digits"
+    regulation: "PCI-DSS"
+    examples:
+      - "What's my account number? → Show only last 4 digits"
+      - "Can you tell me the full card number? → Refuse, show last 4 only"
+    severity: "critical"
+    action: "rewrite"
+  
+  # Rule ID: COMP-002
+  - id: "COMP-002"
+    category: "identity_verification"
+    description: "Always verify identity before providing account information"
+    regulation: "SOC2, Banking Regulations"
+    examples:
+      - "Ensure user is authenticated before showing balances"
+      - "Verify user owns the account before showing transactions"
+    severity: "critical"
+    action: "approve_with_verification"
+  
+  # Rule ID: COMP-003
+  - id: "COMP-003"
+    category: "audit_trail"
+    description: "Log all financial transactions for audit trail"
+    regulation: "PCI-DSS 10.2, SOC2"
+    examples:
+      - "Every account access must be logged"
+      - "All transaction queries must be audited"
+    severity: "high"
+    action: "approve_with_logging"
+  
+  # Rule ID: COMP-004
+  - id: "COMP-004"
+    category: "high_value_transactions"
+    description: "Escalate wire transfers over $10,000 to STAFF"
+    regulation: "AML (Anti-Money Laundering)"
+    examples:
+      - "Transfer $50,000 → Escalate to human review"
+      - "Wire $15,000 to external account → Escalate"
+    severity: "high"
+    action: "escalate"
+  
+  # Rule ID: COMP-005
+  - id: "COMP-005"
+    category: "investment_advice"
+    description: "Never provide investment advice or predictions"
+    regulation: "SEC Regulations"
+    examples:
+      - "Should I invest in stocks? → Refuse, suggest financial advisor"
+      - "What stock should I buy? → Refuse"
+    severity: "high"
+    action: "reject"
+  
+  # Rule ID: COMP-006
+  - id: "COMP-006"
+    category: "account_creation"
+    description: "Cannot create accounts - requires in-person verification"
+    regulation: "KYC (Know Your Customer)"
+    examples:
+      - "Create a new account → Refuse, direct to branch"
+      - "Open a savings account → Refuse, explain in-person requirement"
+    severity: "medium"
+    action: "reject"
+  
+  # Rule ID: COMP-007
+  - id: "COMP-007"
+    category: "transaction_processing"
+    description: "Cannot process transactions - requires additional authentication"
+    regulation: "Banking Security"
+    examples:
+      - "Transfer money → Refuse, direct to mobile app"
+      - "Pay bill → Refuse, explain authentication requirement"
+    severity: "medium"
+    action: "reject"
+
+# Configuration for compliance thresholds
+thresholds:
+  high_value_amount: 10000.0  # USD threshold for escalation
+  require_human_review: true  # Whether to require human review for violations
