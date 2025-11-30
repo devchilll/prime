@@ -522,6 +522,79 @@ def view_audit_logs(limit: int = 10, event_type: Optional[str] = None) -> str:
         return f"❌ Failed to retrieve audit logs: {str(e)}"
 
 
+def resolve_escalation_ticket(ticket_id: str, resolution_note: str) -> str:
+    """Resolve an escalation ticket (STAFF/ADMIN only).
+    
+    This tool allows STAFF and ADMIN users to mark escalation tickets as resolved
+    with a resolution note. The ticket will remain in the system but with status "resolved".
+    
+    Args:
+        ticket_id: The ID of the escalation ticket to resolve
+        resolution_note: Note explaining how the ticket was resolved
+        
+    Returns:
+        Confirmation message
+    """
+    try:
+        from datetime import datetime
+        
+        # Check permissions
+        current_user = IAMUser(
+            user_id=config.IAM_CURRENT_USER_ID,
+            role=UserRole[config.IAM_CURRENT_USER_ROLE],
+            name=config.IAM_CURRENT_USER_NAME
+        )
+        
+        # Only STAFF and ADMIN can resolve tickets
+        if current_user.role not in [UserRole.STAFF, UserRole.ADMIN]:
+            audit_logger.log_event(
+                event_type=AuditEventType.SAFETY_BLOCK,
+                user_id=current_user.user_id,
+                action="resolve_ticket_unauthorized",
+                success=False,
+                details={"ticket_id": ticket_id, "role": current_user.role.value}
+            )
+            return "❌ Permission denied: Only STAFF and ADMIN users can resolve escalation tickets"
+        
+        # Get the escalation queue
+        queue = EscalationQueue()
+        
+        # Resolve the ticket using the queue's method
+        success = queue.resolve_ticket(current_user, ticket_id, resolution_note)
+        
+        if not success:
+            return f"❌ Failed to resolve ticket {ticket_id}. It may not exist or you may not have permission."
+        
+        # Log the resolution
+        audit_logger.log_event(
+            event_type=AuditEventType.ESCALATION_RESOLVED,
+            user_id=current_user.user_id,
+            action="ticket_resolved",
+            details={
+                "ticket_id": ticket_id,
+                "resolved_by": current_user.user_id,
+                "resolution_note": resolution_note[:200]
+            }
+        )
+        
+        return (
+            f"✅ Escalation ticket resolved successfully!\n\n"
+            f"Ticket ID: {ticket_id}\n"
+            f"Resolved By: {current_user.user_id} ({current_user.name})\n"
+            f"Resolution: {resolution_note}"
+        )
+        
+    except Exception as e:
+        audit_logger.log_event(
+            event_type=AuditEventType.ESCALATION_RESOLVED,
+            user_id=config.IAM_CURRENT_USER_ID,
+            action="resolve_ticket_failed",
+            success=False,
+            error=str(e)
+        )
+        return f"❌ Error resolving ticket: {str(e)}"
+
+
 # Export tools
 OBSERVABILITY_TOOLS = [
     safety_check_layer1,
@@ -530,5 +603,6 @@ OBSERVABILITY_TOOLS = [
     create_escalation_ticket,
     list_escalation_tickets,
     log_agent_response,
-    view_audit_logs
+    view_audit_logs,
+    resolve_escalation_ticket,
 ]

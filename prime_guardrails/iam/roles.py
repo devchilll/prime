@@ -58,6 +58,7 @@ ROLE_PERMISSIONS: dict[UserRole, Set[Permission]] = {
         Permission.USE_AGENT,
         Permission.VIEW_OWN_ESCALATIONS,
         Permission.VIEW_ALL_ESCALATIONS,  # Can read queue
+        Permission.RESOLVE_ESCALATIONS,  # Can resolve tickets (added for consistency)
         Permission.VIEW_ACCOUNTS,
         Permission.VIEW_TRANSACTIONS,
         Permission.VIEW_CONFIG,

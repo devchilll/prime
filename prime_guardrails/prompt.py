@@ -63,6 +63,26 @@ TOOL_DEFINITIONS = {
             "notes": ["Example: report_fraud(account_id=\"acc001\", description=\"...\", user_id=\"user123\")"]
         }
     },
+    "transfer_money": {
+        "USER": {
+            "title": "Transfer Money Between My Accounts",
+            "tool": "transfer_money(from_account_id, to_account_id, amount, description=None)",
+            "notes": [
+                "Transfer money between your own accounts only",
+                "Example: transfer_money(from_account_id=\"acc001\", to_account_id=\"acc002\", amount=100.00, description=\"Savings\")",
+                "Validates ownership of both accounts and sufficient balance"
+            ]
+        },
+        "STAFF_ADMIN": {
+            "title": "Transfer Money Between My Accounts",
+            "tool": "transfer_money(from_account_id, to_account_id, amount, description=None)",
+            "notes": [
+                "Transfer money between your own accounts only",
+                "Example: transfer_money(from_account_id=\"acc001\", to_account_id=\"acc002\", amount=100.00)",
+                "Note: STAFF/ADMIN cannot transfer on behalf of customers"
+            ]
+        }
+    },
     # Universal tools (same for all roles)
     "safety_layer1": {
         "title": "Layer 1 Safety Check (REQUIRED FIRST - Step 1)",
@@ -109,6 +129,15 @@ TOOL_DEFINITIONS = {
         "tool": "list_escalation_tickets(status=None)",
         "notes": ["Use when user asks to see the escalation queue or tickets"]
     },
+    "resolve_escalation": {
+        "title": "Resolve Escalation Ticket (STAFF/ADMIN ONLY)",
+        "tool": "resolve_escalation_ticket(ticket_id, resolution_note)",
+        "notes": [
+            "Mark an escalation ticket as resolved",
+            "Ticket remains in system with status 'resolved'",
+            "Example: resolve_escalation_ticket(ticket_id=\"abc-123\", resolution_note=\"Contacted customer, issue resolved\")"
+        ]
+    },
     "list_escalations_user": {
         "title": "List My Escalation Tickets",
         "tool": "list_escalation_tickets(status=None)",
@@ -137,7 +166,7 @@ def get_tool_descriptions(role_str: str) -> str:
     
     # Banking tools (role-specific)
     role_key = "USER" if role == UserRole.USER else "STAFF_ADMIN"
-    for tool_name in ["account_balance", "transaction_history", "list_accounts", "report_fraud"]:
+    for tool_name in ["account_balance", "transaction_history", "list_accounts", "report_fraud", "transfer_money"]:
         tools.append(format_tool(TOOL_DEFINITIONS[tool_name][role_key]))
     
     # General banking info
@@ -155,8 +184,10 @@ def get_tool_descriptions(role_str: str) -> str:
     if role == UserRole.ADMIN:
         tools.append(format_tool(TOOL_DEFINITIONS["list_escalations_admin"]))
         tools.append(format_tool(TOOL_DEFINITIONS["view_audit_logs"]))
+        tools.append(format_tool(TOOL_DEFINITIONS["resolve_escalation"]))
     elif role == UserRole.STAFF:
         tools.append(format_tool(TOOL_DEFINITIONS["list_escalations_staff"]))
+        tools.append(format_tool(TOOL_DEFINITIONS["resolve_escalation"]))
     else:  # USER
         tools.append(format_tool(TOOL_DEFINITIONS["list_escalations_user"]))
     

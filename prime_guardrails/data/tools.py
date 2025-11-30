@@ -269,10 +269,149 @@ def report_fraud(account_id: str, description: str, user_id: Optional[str] = Non
         return f"Error submitting fraud report: {str(e)}"
 
 
+def transfer_money(from_account_id: str, to_account_id: str, amount: float, description: Optional[str] = None) -> str:
+    """Transfer money between accounts (USER can only transfer between their own accounts).
+    
+    Args:
+        from_account_id: Source account ID
+        to_account_id: Destination account ID
+        amount: Amount to transfer
+        description: Optional description for the transfer
+        
+    Returns:
+        Confirmation message with transaction details
+    """
+    try:
+        import uuid
+        
+        # Get current user
+        iam_user = get_current_user()
+        user_id = iam_user.user_id
+        
+        # Validate amount
+        if amount <= 0:
+            return "❌ Transfer amount must be greater than zero."
+        
+        # Get both accounts to verify ownership and balances
+        from_account = db.get_account(iam_user, from_account_id)
+        to_account = db.get_account(iam_user, to_account_id)
+        
+        if not from_account:
+            return f"❌ Source account {from_account_id} not found or you don't have access to it."
+        
+        if not to_account:
+            return f"❌ Destination account {to_account_id} not found or you don't have access to it."
+        
+        # Verify both accounts belong to the current user
+        if from_account.user_id != user_id:
+            audit_logger.log_event(
+                event_type=AuditEventType.SAFETY_BLOCK,
+                user_id=user_id,
+                action="transfer_unauthorized_source",
+                success=False,
+                details={"from_account": from_account_id, "actual_owner": from_account.user_id}
+            )
+            return f"❌ You can only transfer from your own accounts."
+        
+        if to_account.user_id != user_id:
+            audit_logger.log_event(
+                event_type=AuditEventType.SAFETY_BLOCK,
+                user_id=user_id,
+                action="transfer_unauthorized_destination",
+                success=False,
+                details={"to_account": to_account_id, "actual_owner": to_account.user_id}
+            )
+            return f"❌ You can only transfer to your own accounts."
+        
+        # Check sufficient balance
+        if from_account.balance < amount:
+            return f"❌ Insufficient funds. Account {from_account_id} balance: ${from_account.balance:.2f}, requested transfer: ${amount:.2f}"
+        
+        # Create transaction ID
+        transaction_id = str(uuid.uuid4())
+        
+        # Update balances
+        from_account.balance -= amount
+        to_account.balance += amount
+        
+        # Create transaction records
+        transfer_desc = description or f"Transfer from {from_account_id} to {to_account_id}"
+        
+        # Transaction for source account (withdrawal)
+        from_txn = Transaction(
+            transaction_id=f"{transaction_id}_from",
+            account_id=from_account_id,
+            transaction_type=TransactionType.TRANSFER,
+            amount=-amount,  # Negative for withdrawal
+            description=f"Transfer to {to_account_id}: {transfer_desc}",
+            from_account_id=from_account_id,
+            to_account_id=to_account_id
+        )
+        
+        # Transaction for destination account (deposit)
+        to_txn = Transaction(
+            transaction_id=f"{transaction_id}_to",
+            account_id=to_account_id,
+            transaction_type=TransactionType.TRANSFER,
+            amount=amount,  # Positive for deposit
+            description=f"Transfer from {from_account_id}: {transfer_desc}",
+            from_account_id=from_account_id,
+            to_account_id=to_account_id
+        )
+        
+        # Save to database (simplified - in real system would be atomic transaction)
+        db.update_account(from_account)
+        db.update_account(to_account)
+        db.add_transaction(from_txn)
+        db.add_transaction(to_txn)
+        
+        # Log for audit
+        audit_logger.log_event(
+            event_type=AuditEventType.TRANSACTION_QUERY,
+            user_id=user_id,
+            action="transfer_completed",
+            details={
+                "from_account": from_account_id,
+                "to_account": to_account_id,
+                "amount": amount,
+                "transaction_id": transaction_id,
+                "description": transfer_desc
+            }
+        )
+        
+        # Log for PCI-DSS compliance
+        compliance_logger.log_pci_data_access(
+            user_id=user_id,
+            data_type="transaction",
+            account_id=from_account_id,
+            operation="transfer"
+        )
+        
+        return (
+            f"✅ Transfer successful!\n\n"
+            f"Amount: ${amount:.2f}\n"
+            f"From: {from_account_id} ({from_account.account_type.value}) - New balance: ${from_account.balance:.2f}\n"
+            f"To: {to_account_id} ({to_account.account_type.value}) - New balance: ${to_account.balance:.2f}\n"
+            f"Transaction ID: {transaction_id}\n"
+            f"Description: {transfer_desc}"
+        )
+        
+    except Exception as e:
+        audit_logger.log_event(
+            event_type=AuditEventType.TRANSACTION_QUERY,
+            user_id=get_current_user().user_id,
+            action="transfer_failed",
+            success=False,
+            error=str(e)
+        )
+        return f"❌ Error processing transfer: {str(e)}"
+
+
 # Export all tools
 BANKING_TOOLS = [
     get_account_balance,
     get_transaction_history,
     get_user_accounts,
     report_fraud,
+    transfer_money,
 ]
