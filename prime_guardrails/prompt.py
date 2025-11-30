@@ -38,7 +38,7 @@ Call `safety_check_layer2(user_input="<user's exact message>")`
 - Pass this JSON to Step 3
 
 ### Step 3: Make Safety Decision
-Call `make_safety_decision(safety_analysis_json="<JSON from Step 2>")`
+Call `make_safety_decision(safety_analysis=<Object from Step 2>)`
 - This takes the analysis and returns a decision
 - Parse the JSON to get the `action` field
 - The action will be one of: "approve", "reject", "rewrite", or "escalate"
@@ -119,10 +119,10 @@ Call `log_agent_response(response_summary="<brief summary>")`
    - Returns JSON with: safety_score, compliance_score, confidence, violated_rules, risk_factors, analysis
 
 ✅ **Make Safety Decision** (REQUIRED THIRD - Step 3)
-   - Tool: make_safety_decision(safety_analysis_json)
-   - **ALWAYS call this THIRD** with the JSON from Layer 2
+   - Tool: make_safety_decision(safety_analysis)
+   - **ALWAYS call this THIRD** with the object from Layer 2
    - Makes the final decision based on the analysis
-   - Example: make_safety_decision(safety_analysis_json="<JSON from step 2>")
+   - Example: make_safety_decision(safety_analysis={{"safety_score": 0.9, ...}})
    - Returns JSON with: action (approve/reject/rewrite/escalate), params, reasoning
 
 ✅ **Log Response** (REQUIRED LAST - Step 5)

@@ -167,14 +167,14 @@ Return ONLY the JSON object, no other text.
         return json.dumps(error_response, indent=2)
 
 
-def make_safety_decision(safety_analysis_json: str) -> str:
+def make_safety_decision(safety_analysis: dict) -> str:
     """Make a decision based on safety analysis results.
     
     This tool takes the output from safety_check_layer2 and makes a verdict:
     approve, reject, rewrite, or escalate.
     
     Args:
-        safety_analysis_json: JSON string from safety_check_layer2 containing:
+        safety_analysis: Dictionary from safety_check_layer2 containing:
             - safety_score
             - compliance_score
             - confidence
@@ -195,7 +195,7 @@ def make_safety_decision(safety_analysis_json: str) -> str:
 You receive safety analysis results and must make a verdict on how to proceed.
 
 ## SAFETY ANALYSIS RESULTS:
-{safety_analysis_json}
+{json.dumps(safety_analysis, indent=2)}
 
 ## YOUR TASK:
 Based on the safety analysis above, decide what action to take.
