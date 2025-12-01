@@ -273,15 +273,29 @@ class Database:
             created_at=datetime.fromisoformat(row["created_at"])
         )
     
-    def get_user_accounts(self, user_id: str) -> List[Account]:
+    def get_user_accounts(self, user_id: str, iam_user: Optional[IAMUser] = None) -> List[Account]:
         """Get all accounts for a user.
         
         Args:
             user_id: User ID
+            iam_user: IAM user making the request (optional for internal use)
             
         Returns:
             List of Account models
+            
+        Raises:
+            AccessDeniedException: If user lacks permission
         """
+        if iam_user:
+            # Check permission
+            AccessControl.check_permission(iam_user, Permission.VIEW_ACCOUNTS)
+            
+            # Users can only view their own accounts
+            if iam_user.role.value == "user" and user_id != iam_user.user_id:
+                raise AccessDeniedException(
+                    f"User {iam_user.user_id} cannot access accounts for {user_id}"
+                )
+        
         conn = self._get_connection()
         cursor = conn.cursor()
         

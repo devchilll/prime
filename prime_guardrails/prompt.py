@@ -7,10 +7,7 @@ from .iam import UserRole, Permission, get_permissions
 configs = Config()
 policy = configs.current_policy
 
-# Build compliance section (legacy - now using YAML config)
-compliance_section = ""
-if policy.compliance.enabled and policy.compliance.transformed_rules:
-    compliance_section = format_compliance_section(policy.compliance.transformed_rules)
+
 
 # Tool descriptions organized by permission requirements
 TOOL_DEFINITIONS = {
@@ -302,9 +299,10 @@ The response you provide must match exactly what you logged in full_response.
    - Requires in-person verification for security
    - Response: "I cannot create accounts directly. Please visit a branch where our staff can verify your identity and help you open an account."
 
-❌ **Process Transactions or Transfers**
-   - Requires additional authentication for security
-   - Response: "I cannot process transactions directly. You can use our mobile app or visit a branch for transfers."
+❌ **Process External Transactions**
+   - Payments to other people or external accounts require additional authentication
+   - Response: "I cannot process external payments directly. You can use our mobile app or visit a branch for these transactions."
+   - **Note:** You CAN process transfers between the user's own accounts using the `transfer_money` tool.
 
 ❌ **Modify Account Settings**
    - Requires proper authorization
@@ -314,8 +312,7 @@ The response you provide must match exactly what you logged in full_response.
    - Not within scope of customer service
    - Response: "I cannot provide investment advice. I can connect you with one of our financial advisors."
 
-## COMPLIANCE RULES:
-{compliance_section}
+
 
 ## HOW TO RESPOND:
 

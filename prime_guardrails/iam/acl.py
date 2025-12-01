@@ -98,7 +98,7 @@ class AccessControl:
             user: User to check
             
         Returns:
-            True if user can resolve escalations (ADMIN only)
+            True if user can resolve escalations (STAFF and ADMIN)
         """
         return user.has_permission(Permission.RESOLVE_ESCALATIONS)
     

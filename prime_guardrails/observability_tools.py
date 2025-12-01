@@ -28,22 +28,40 @@ genai_client = Client(
 )
 
 
+from detoxify import Detoxify
+
+# Initialize Detoxify model (loads once at startup)
+# model_type='original' uses unitary/toxic-bert
+try:
+    print("Loading safety model (unitary/toxic-bert)... this may take a moment.")
+    safety_model = Detoxify('original', device='cpu')
+    print("Safety model loaded successfully.")
+except Exception as e:
+    print(f"Warning: Failed to load safety model: {e}. Layer 1 check will be disabled.")
+    safety_model = None
+
+
 def safety_check_layer1(user_input: str) -> str:
-    """Layer 1: Fast ML-based safety check (MOCK - always passes for now).
+    """Layer 1: Fast ML-based safety check using unitary/toxic-bert.
     
-    This is a placeholder for a fast ML model that would check for:
-    - Offensive language
-    - Prompt injection
-    - Other quick safety violations
-    
-    In production, this would call a lightweight ML model (~50ms latency).
+    Checks for toxicity, severe toxicity, obscenity, threat, insult, and identity hate.
     
     Args:
         user_input: The user's input text to check
         
     Returns:
-        Safety check result (currently always passes)
+        Safety check result string
     """
+    if not safety_model:
+        return "⚠️ Layer 1 Safety Check SKIPPED (Model not loaded)."
+
+    # Run prediction
+    results = safety_model.predict(user_input)
+    
+    # Check for toxicity > 0.7
+    toxicity_score = results.get('toxicity', 0.0)
+    severe_toxicity = results.get('severe_toxicity', 0.0)
+    
     # Log the Layer 1 check
     audit_logger.log_event(
         event_type=AuditEventType.USER_QUERY,
@@ -51,19 +69,15 @@ def safety_check_layer1(user_input: str) -> str:
         action="safety_layer1_check",
         details={
             "input": user_input[:200],
-            "model": "mock_ml_classifier",
-            "note": "Mock implementation - always passes"
+            "model": "unitary/toxic-bert",
+            "scores": {k: float(v) for k, v in results.items()}
         }
     )
     
-    # Mock implementation - always passes
-    is_safe = True
-    risk_score = 0.0
-    
-    if is_safe:
-        return f"✅ Layer 1 (ML) Safety Check PASSED. Risk score: {risk_score:.2f}. Proceeding to Layer 2."
+    if toxicity_score > 0.7 or severe_toxicity > 0.5:
+        return f"⚠️ Layer 1 (ML) Safety Check FAILED. Toxicity: {toxicity_score:.2f}. Request blocked."
     else:
-        return f"⚠️ Layer 1 (ML) Safety Check FAILED. Risk score: {risk_score:.2f}. Request blocked."
+        return f"✅ Layer 1 (ML) Safety Check PASSED. Toxicity: {toxicity_score:.2f}. Proceeding to Layer 2."
 
 
 def safety_check_layer2(user_input: str) -> str:
@@ -351,7 +365,21 @@ def list_escalation_tickets(status: Optional[str] = None) -> str:
             # Fallback to USER if invalid role configured
             user_role = UserRole.USER
             
+        # Use the actual configured user and role to enforce IAM permissions
+        from .iam import User as IAMUser, UserRole, AccessControl, Permission
+        
+        # Map string role from config to UserRole enum
+        role_str = config.IAM_CURRENT_USER_ROLE.upper()
+        try:
+            user_role = UserRole(role_str.lower())
+        except ValueError:
+            # Fallback to USER if invalid role configured
+            user_role = UserRole.USER
+            
         current_user = IAMUser(user_id=config.IAM_CURRENT_USER_ID, role=user_role)
+        
+        # Check permissions
+        AccessControl.check_permission(current_user, Permission.VIEW_OWN_ESCALATIONS)
         
         tickets = queue.view_tickets(current_user, status=status)
         
@@ -434,9 +462,12 @@ def view_audit_logs(limit: int = 10, event_type: Optional[str] = None) -> str:
             name=config.IAM_CURRENT_USER_NAME
         )
         
-        # Only ADMIN and STAFF can view logs
-        if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
-            return "❌ Permission denied: Only ADMIN and STAFF users can view audit logs"
+        # Check permissions
+        from .iam import AccessControl, Permission
+        try:
+            AccessControl.check_permission(current_user, Permission.VIEW_LOGS)
+        except Exception:
+            return "❌ Permission denied: You do not have permission to view audit logs"
         
         # Limit the number of entries
         limit = min(limit, 200)
@@ -539,14 +570,17 @@ def resolve_escalation_ticket(ticket_id: str, resolution_note: str) -> str:
         from datetime import datetime
         
         # Check permissions
+        # Check permissions
         current_user = IAMUser(
             user_id=config.IAM_CURRENT_USER_ID,
             role=UserRole[config.IAM_CURRENT_USER_ROLE],
             name=config.IAM_CURRENT_USER_NAME
         )
         
-        # Only STAFF and ADMIN can resolve tickets
-        if current_user.role not in [UserRole.STAFF, UserRole.ADMIN]:
+        from .iam import AccessControl, Permission
+        try:
+            AccessControl.check_permission(current_user, Permission.RESOLVE_ESCALATIONS)
+        except Exception:
             audit_logger.log_event(
                 event_type=AuditEventType.SAFETY_BLOCK,
                 user_id=current_user.user_id,
@@ -554,7 +588,7 @@ def resolve_escalation_ticket(ticket_id: str, resolution_note: str) -> str:
                 success=False,
                 details={"ticket_id": ticket_id, "role": current_user.role.value}
             )
-            return "❌ Permission denied: Only STAFF and ADMIN users can resolve escalation tickets"
+            return "❌ Permission denied: You do not have permission to resolve escalation tickets"
         
         # Get the escalation queue
         queue = EscalationQueue()

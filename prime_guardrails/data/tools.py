@@ -158,8 +158,8 @@ def get_user_accounts(user_id: Optional[str] = None) -> str:
         if user_id is None:
             user_id = current_iam_user.user_id
         
-        # Get user's accounts
-        accounts = db.get_user_accounts(user_id)
+        # Get user's accounts (pass IAM user for permission check)
+        accounts = db.get_user_accounts(user_id, current_iam_user)
         
         if not accounts:
             return f"No accounts found for user {user_id}."

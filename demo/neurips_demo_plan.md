@@ -1,10 +1,10 @@
 # NeurIPS 2025 Live Demo Plan: PRIME Framework
-**Title:** Building Safe, Compliant, and Observable Agentic Systems
+**Title:** PRIME: The Enterprise Agent Governance Framework
 **Duration:** 3 Hours
-**Goal:** Demonstrate how to move beyond "vibes-based" safety to engineered, deterministic guardrails for Enterprise AI.
+**Goal:** Demonstrate how to build trustworthy agents using a complete governance layer (Identity, Policy, Observability).
 
-## Core Narrative: "The 4 Pillars of PRIME"
-Don't just show code; tell the story of **PRIME**:
+## Core Narrative: "From Safety to Governance"
+Don't just show a safety filter; tell the story of **PRIME** as the operating system for agent trust:
 1.  **P**recise Guardrails (Safety)
 2.  **R**obust Identity (IAM)
 3.  **I**ntegrated Compliance (Policy-as-Code)
@@ -34,22 +34,23 @@ Don't just show code; tell the story of **PRIME**:
 *   **Demo**:
     1.  **Login as User**: Ask "Show me the escalation queue". Agent says "I can only show YOUR tickets." (Show the dynamic prompt in code).
     2.  **Login as Admin**: Ask the same question. Agent shows the full queue.
-    3.  **Attack**: Try to access `user_b`'s account as `user_a`. Show the ACL denial in the audit log.
+    3.  **Attack**: Try to transfer money from `user_b`'s account as `user_a`. Show the **AccessDeniedException** in the logs and the agent's refusal.
 *   **Wow Moment**: Showing the **System Prompt changing in real-time** based on who is logged in.
 
 #### Sprint 3: Compliance (Policy-as-Code)
 *   **Demo**:
     1.  Show the agent answering a question casually.
-    2.  **Live Edit**: Open `compliance_rules.yaml`. Add a rule: *"MUST end every response with 'Member FDIC'."*
+    2.  **Live Edit**: Open `prime_guardrails/rules/compliance_rules.yaml`. Add a rule: *"MUST end every response with 'Member FDIC'."*
     3.  **Restart & Run**: Ask the same question. The agent now appends the legal disclaimer.
 *   **Wow Moment**: "Hot-patching" the agent's behavior via configuration, not code.
 
 #### Sprint 4: Observability (The "Black Box" Recorder)
 *   **Demo**:
-    1.  Open the **ADK Trace Viewer**.
-    2.  Walk through a single complex request (e.g., "Transfer money if my balance is high").
-    3.  Show the *exact* sequence: Safety Check -> Balance Check -> Decision -> Response -> Audit Log.
-*   **Wow Moment**: "We have a complete forensic trail of the agent's 'thought process'."
+    1.  **Terminal View**: Run `uv run python prime_guardrails/logging/view_logs.py --follow`.
+    2.  **Action**: Perform a complex `transfer_money` request in the web UI.
+    3.  **Real-time**: Watch the logs stream in the terminal: Safety Check -> IAM Check -> DB Transaction -> Audit Log.
+    4.  **Trace View**: Switch to ADK Trace Viewer to see the LLM's "thought process" and tool calls.
+*   **Wow Moment**: "We have a complete forensic trail of the agent's 'thought process' in real-time."
 
 ### Part 3: Interactive Red Teaming (45 mins)
 *   **Activity**: "Break the Agent."

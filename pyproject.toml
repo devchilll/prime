@@ -18,6 +18,7 @@ dependencies = [
     "pytest>=7.0.0",
     "numpy<2",
     "pyyaml>=6.0.3",
+    "detoxify>=0.5.2",
 ]
 
 requires-python = ">=3.10,<3.13"

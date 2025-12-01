@@ -128,10 +128,9 @@ prime_guardrails/
 ├── safety/              # Pillar 1: Text/Image safety tools
 │   ├── __init__.py
 │   └── tools.py         # TextSafetyTool, ImageSafetyTool
-├── compliance/          # Pillar 2: Business rules
+├── rules/               # Pillar 2: Compliance rules (YAML)
 │   ├── __init__.py
-│   ├── rules.py         # Rule transformation
-│   └── examples.py      # Industry templates
+│   └── compliance_rules.yaml
 ├── iam/                 # Pillar 3: Access control
 │   ├── __init__.py
 │   ├── roles.py         # UserRole, Permission enums
@@ -146,11 +145,13 @@ prime_guardrails/
 │   └── database.py      # DB queries
 ├── logging/             # Audit trail
 │   ├── audit.py         # Transaction logging
-│   └── compliance_log.py # Regulatory logs
+│   ├── compliance_log.py # Regulatory logs
+│   └── view_logs.py     # Terminal Log Viewer
 ├── config.py            # 4-pillar configuration
 ├── agent.py             # Main ADK agent
 ├── callbacks.py         # Layer 2 safety callbacks
 ├── prompt.py            # Agent instructions
+├── observability_tools.py # Traceable tools for ADK
 └── tools.py             # Unified imports
 ```
 
@@ -614,6 +615,24 @@ uv run adk web
 2025-11-28 12:00:01 - INFO - [Tool] get_account_balance(user_id=user)
 2025-11-28 12:00:01 - INFO - [Audit] User user queried balance: $1,234.56
 ```
+
+### 🖥️ Terminal Log Viewer (New!)
+
+For real-time debugging without the web UI, use the terminal-based log viewer:
+
+```bash
+# View recent logs (interactive mode)
+uv run python prime_guardrails/logging/view_logs.py
+
+# View specific event types
+uv run python prime_guardrails/logging/view_logs.py --event transaction_query
+
+# Follow mode (tail logs)
+uv run python prime_guardrails/logging/view_logs.py --follow
+```
+
+![Terminal Viewer](https://example.com/terminal_viewer.png)
+*Real-time color-coded audit logs in your terminal*
 
 ---
 
