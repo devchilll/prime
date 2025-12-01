@@ -193,4 +193,4 @@ temp/
 *.zip
 
 # demo 
-*/demo/*
+demo/
