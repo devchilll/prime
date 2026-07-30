@@ -29,6 +29,17 @@ logger = logging.getLogger(__name__)
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
+def _parse_retry_after(value: Optional[str]) -> Optional[float]:
+    """Parse a Retry-After header (delta-seconds form only) into seconds."""
+    if not value:
+        return None
+    try:
+        seconds = float(value.strip())
+    except ValueError:
+        return None  # HTTP-date form: fall back to normal backoff
+    return seconds if seconds >= 0 else None
+
+
 class HttpClient:
     """Thin wrapper over ``requests.Session`` with retries and rate limiting."""
 
@@ -77,11 +88,13 @@ class HttpClient:
     def get(self, url: str, **kwargs) -> requests.Response:
         """GET *url* with throttling + exponential-backoff retries.
 
-        Raises ``requests.HTTPError`` for non-retryable 4xx/5xx responses and
+        Honors ``Retry-After`` on 429/503 responses. Raises
+        ``requests.HTTPError`` for non-retryable 4xx/5xx responses and
         ``requests.RequestException`` if all retries are exhausted.
         """
         kwargs.setdefault("timeout", self.timeout)
         last_exc: Optional[Exception] = None
+        retry_after: Optional[float] = None
 
         for attempt in range(self.max_retries + 1):
             self._throttle()
@@ -98,19 +111,32 @@ class HttpClient:
                         response.status_code,
                         attempt + 1,
                     )
+                    retry_after = _parse_retry_after(
+                        response.headers.get("Retry-After")
+                    )
                     last_exc = requests.HTTPError(
                         f"HTTP {response.status_code} for {url}", response=response
                     )
+                    response.close()
                 else:
                     response.raise_for_status()
                     return response
 
             if attempt < self.max_retries:
-                backoff = 2 ** attempt  # 1s, 2s, 4s, 8s, ...
+                backoff = float(2 ** attempt)  # 1s, 2s, 4s, 8s, ...
+                if retry_after is not None:
+                    backoff = max(backoff, min(retry_after, 120.0))
+                    retry_after = None
                 time.sleep(backoff)
 
-        assert last_exc is not None
+        if last_exc is None:  # pragma: no cover - defensive
+            raise requests.RequestException(f"GET {url} failed with no response")
         raise last_exc
+
+    def get_stream(self, url: str, **kwargs) -> requests.Response:
+        """GET *url* with ``stream=True`` for chunked downloads (same retries)."""
+        kwargs["stream"] = True
+        return self.get(url, **kwargs)
 
     def get_text(self, url: str, **kwargs) -> str:
         return self.get(url, **kwargs).text

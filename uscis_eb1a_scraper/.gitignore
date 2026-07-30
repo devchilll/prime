@@ -1,6 +1,16 @@
 # The repo-wide .gitignore excludes *.txt*; keep our requirements file tracked.
 !requirements.txt
 
-# Never commit downloaded decision PDFs or scraper output.
+# Bulk pipeline outputs: PDFs and extracted text are regenerable and large.
 decisions/
 *.pdf
+data/pdfs/
+data/text/
+data/.lock
+
+# Root .gitignore ignores *.txt* and **/tests/**/*.json, which would silently
+# drop our test fixtures — re-include them explicitly.
+!tests/fixtures/**
+
+# uv virtualenv
+.venv/

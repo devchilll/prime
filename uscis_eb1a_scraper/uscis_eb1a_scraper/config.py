@@ -49,6 +49,24 @@ DEFAULT_DELAY_SECONDS = 1.5
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_MAX_RETRIES = 4
 
+# --- Incremental pipeline defaults -------------------------------------------
+# Earliest month the dataset covers (EB-1A backfill start).
+DEFAULT_START = (2020, 1)
+# USCIS posts decisions "within a month" of issuance and backfills older
+# months, so each incremental run re-scans this many trailing months.
+RESCAN_MONTHS = 4
+
+# Data layout, relative to the project root (see INSTRUCTIONS.md):
+#   data/manifest.jsonl   pipeline state           (committed)
+#   data/pdfs/<YYYY>/     raw decision PDFs        (gitignored)
+#   data/text/<YYYY>/     extracted text           (gitignored)
+#   data/cases.jsonl      per-case metadata        (committed)
+#   data/analytics.json   dashboard aggregates     (committed)
+#   data/extraction_qa.json  extraction QA report  (committed)
+#   dashboard/index.html  generated dashboard      (committed)
+DATA_DIR = "data"
+DASHBOARD_DIR = "dashboard"
+
 
 @dataclass(frozen=True)
 class Category:
