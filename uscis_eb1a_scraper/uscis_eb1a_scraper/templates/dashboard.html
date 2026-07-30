@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EB-1A AAO Decisions Explorer</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --s1: #2a78d6; /* dismissed */
+    --s2: #eb6834; /* sustained */
+    --s3: #1baf7a; /* remanded / favorable overlay */
+    --s4: #eda100; /* other + unknown */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255,255,255,0.10);
+      --s1: #3987e5;
+      --s2: #d95926;
+      --s3: #199e70;
+      --s4: #c98500;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255,255,255,0.10);
+    --s1: #3987e5;
+    --s2: #d95926;
+    --s3: #199e70;
+    --s4: #c98500;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 24px 20px 64px; }
+  h1 { font-size: 1.9rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.3rem; margin: 40px 0 12px; }
+  h3 { font-size: 1rem; margin: 0 0 2px; font-weight: 600; }
+  p { margin: 0.5em 0; }
+  a { color: var(--s1); }
+  .subtitle { color: var(--ink-2); margin: 0 0 20px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 16px 0 8px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .tile .label { font-size: 0.8rem; color: var(--ink-2); }
+  .tile .value { font-size: 1.7rem; font-weight: 600; line-height: 1.2; }
+  .tile .note { font-size: 0.75rem; color: var(--muted); }
+
+  .prose { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; }
+  .prose p { max-width: 72ch; }
+  .disclaimer {
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--s2);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--s2) 8%, var(--surface));
+    padding: 12px 16px;
+    margin-top: 14px;
+    font-weight: 600;
+  }
+  .disclaimer span { font-weight: 400; color: var(--ink-2); display: block; margin-top: 2px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 16px; }
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px 12px; }
+  .card figcaption { font-size: 0.85rem; color: var(--ink-2); margin-top: 6px; }
+  figure.card { margin: 0; }
+  .chart-body { margin-top: 8px; }
+  .chart-body svg { display: block; width: 100%; height: auto; }
+  .no-data { color: var(--muted); font-size: 0.9rem; padding: 28px 0; text-align: center; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.8rem; color: var(--ink-2); margin-top: 4px; }
+  .legend .item { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  .mark { cursor: default; }
+  .mark:hover, .mark:focus-visible { filter: brightness(1.12); outline: none; }
+
+  #tooltip {
+    position: fixed; z-index: 10; display: none; pointer-events: none;
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    padding: 8px 10px; font-size: 0.8rem; max-width: 280px;
+  }
+  #tooltip .tip-title { font-weight: 600; margin-bottom: 4px; }
+  #tooltip .tip-row { display: flex; align-items: center; gap: 6px; }
+  #tooltip .tip-key { width: 10px; height: 3px; border-radius: 2px; flex: none; }
+  #tooltip .tip-label { color: var(--ink-2); }
+  #tooltip .tip-value { font-weight: 600; margin-left: auto; padding-left: 12px; }
+
+  details.twin { margin-top: 8px; font-size: 0.85rem; }
+  details.twin summary { cursor: pointer; color: var(--ink-2); }
+  details.twin table { border-collapse: collapse; margin-top: 6px; width: 100%; }
+  details.twin th, details.twin td { text-align: left; padding: 3px 10px 3px 0; border-bottom: 1px solid var(--grid); }
+  details.twin td.num, details.twin th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .takeaways { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .takeaways li {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px 10px 40px; position: relative; max-width: 100%;
+  }
+  .takeaways li::before {
+    content: "→"; position: absolute; left: 14px; top: 10px; color: var(--s1); font-weight: 700;
+  }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 12px; }
+  .controls input[type="search"], .controls select {
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--axis); border-radius: 7px;
+    padding: 6px 9px; font: inherit; font-size: 0.85rem;
+  }
+  .controls input[type="search"] { min-width: 180px; }
+  .controls button, .pager button {
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--axis); border-radius: 7px;
+    padding: 6px 12px; font: inherit; font-size: 0.85rem; cursor: pointer;
+  }
+  .controls button:hover, .pager button:hover { border-color: var(--ink-2); }
+  .pager button:disabled { opacity: 0.45; cursor: default; }
+
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  table.cases { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 0.87rem; }
+  table.cases th, table.cases td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  table.cases th { font-size: 0.78rem; color: var(--ink-2); font-weight: 600; white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
+  table.cases th.sortable { cursor: pointer; user-select: none; }
+  table.cases th.sortable:hover { color: var(--ink); }
+  table.cases td.date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.cases td.metcount { font-variant-numeric: tabular-nums; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); font-size: 0.78rem; color: var(--ink); background: var(--surface); white-space: nowrap; }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .chip { display: inline-block; font-size: 0.7rem; color: var(--ink-2); border: 1px solid var(--grid); border-radius: 5px; padding: 0 5px; margin: 1px 2px 1px 0; white-space: nowrap; }
+  .pager { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 0.85rem; color: var(--ink-2); }
+
+  .qa-list { list-style: none; padding: 0; margin: 8px 0; }
+  .qa-list li { padding: 2px 0; }
+  .qa-list .num { font-weight: 600; }
+  code { background: color-mix(in srgb, var(--ink) 7%, var(--surface)); border-radius: 4px; padding: 1px 5px; font-size: 0.85em; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 0.8rem; border-top: 1px solid var(--grid); padding-top: 14px; }
+</style>
+</head>
+<body>
+<script type="application/json" id="analytics-data">/*__ANALYTICS_JSON__*/</script>
+<script type="application/json" id="cases-data">/*__CASES_JSON__*/</script>
+
+<main>
+  <header>
+    <h1>EB-1A AAO Decisions Explorer</h1>
+    <p class="subtitle">Every published EB-1A ("extraordinary ability") appeal and motion decision from the USCIS Administrative Appeals Office, aggregated so you can see what actually happens — and why.</p>
+    <div class="tiles" id="tiles"></div>
+  </header>
+
+  <section id="what-is-this">
+    <h2>What is this?</h2>
+    <div class="prose">
+      <p>When USCIS denies an EB-1A petition (the employment-based, first-preference immigrant category for people of "extraordinary ability"), the petitioner can appeal to the <strong>Administrative Appeals Office (AAO)</strong> or file a motion to reopen or reconsider. The AAO publishes its decisions — with names removed — in a public reading room. This page aggregates those published EB-1A decisions.</p>
+      <p>These are <strong>non-precedent decisions</strong>: each one binds only the case it decides. They don't set policy, but in bulk they show how the AAO actually applies the ten regulatory criteria and the "final merits" test.</p>
+      <p><strong>Why the numbers look grim — read this before you panic.</strong> Every case here was <em>already denied once</em> and then appealed. Petitions that are approved the first time never reach the AAO and never show up in this data. So a low sustain rate below says "appeals of denials rarely succeed" — it says <em>nothing</em> about your odds of being approved on a first filing, which are far better. This is a classic selection-biased sample; treat it as a map of where denied cases went wrong, not as your personal probability.</p>
+      <div class="disclaimer">This is not legal advice.<span>This is an automated statistical summary of public documents. It may contain extraction errors, and it cannot evaluate your case. Talk to a qualified immigration attorney before making decisions.</span></div>
+    </div>
+  </section>
+
+  <section id="charts-section">
+    <h2>Charts</h2>
+    <div class="grid" id="charts"></div>
+  </section>
+
+  <section id="takeaways-section">
+    <h2>Key takeaways</h2>
+    <ul class="takeaways" id="takeaways"></ul>
+  </section>
+
+  <section id="explorer">
+    <h2>Case explorer</h2>
+    <p class="subtitle">Browse every decision in the dataset. Case IDs link to the original decision PDF on uscis.gov.</p>
+    <div class="controls" id="case-controls"></div>
+    <div class="table-wrap">
+      <table class="cases" id="case-table"></table>
+    </div>
+    <div class="pager" id="case-pager"></div>
+  </section>
+
+  <section id="methodology">
+    <h2>Methodology &amp; data quality</h2>
+    <div class="prose">
+      <p><strong>Where the data comes from.</strong> Decision PDFs are downloaded from the USCIS AAO public decisions repository (the "B2 — Aliens with Extraordinary Ability" collection), then text is extracted from each PDF and parsed with automated pattern matching. The scraper and parser live in the <code>uscis_eb1a_scraper/</code> directory of this project's GitHub repository.</p>
+      <p><strong>Automated extraction is imperfect.</strong> Outcomes, case types, and criteria determinations are pulled from decision text by regular expressions, not by a human reading each case. Scanned or oddly formatted PDFs can defeat the parser. Criterion "met" determinations are <strong>tri-state</strong> — met, not met, or not addressed/unclear — and the unclear ones are <em>excluded</em> from every rate on this page, as are cases whose overall outcome could not be determined.</p>
+      <ul class="qa-list">
+        <li>Cases with an undetermined outcome: <span class="num" id="qa-unknown">—</span></li>
+        <li>Cases with extraction warnings flagged: <span class="num" id="qa-flags">—</span></li>
+        <li>Cases with low-confidence outcome classification: <span class="num" id="qa-lowconf">—</span></li>
+      </ul>
+      <p><strong>Timing.</strong> USCIS posts decisions to the reading room on a delay (see the publication-lag chart), so the most recent months are always incomplete. Coverage window and generation time are shown in the tiles at the top.</p>
+    </div>
+  </section>
+
+  <footer>
+    Built from public USCIS AAO non-precedent decisions. Not affiliated with USCIS. Not legal advice.
+  </footer>
+</main>
+
+<div id="tooltip" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- data ----------
+  function readJSON(id, fallback) {
+    try { return JSON.parse(document.getElementById(id).textContent); }
+    catch (e) { return fallback; }
+  }
+  var A = readJSON("analytics-data", {});
+  var C = readJSON("cases-data", []);
+  if (!A || typeof A !== "object") A = {};
+  if (!Array.isArray(C)) C = [];
+  var COV = A.coverage || {};
+  var HEAD = A.headline || {};
+
+  // ---------- helpers ----------
+  var SVGNS = "http://www.w3.org/2000/svg";
+  function h(tag, attrs) {
+    var el = document.createElement(tag);
+    if (attrs) for (var k in attrs) {
+      if (k === "text") el.textContent = attrs[k];
+      else el.setAttribute(k, attrs[k]);
+    }
+    for (var i = 2; i < arguments.length; i++) {
+      var ch = arguments[i];
+      if (ch == null) continue;
+      el.append(ch);
+    }
+    return el;
+  }
+  function s(tag, attrs) {
+    var el = document.createElementNS(SVGNS, tag);
+    if (attrs) for (var k in attrs) {
+      if (k === "text") el.textContent = attrs[k];
+      else el.setAttribute(k, attrs[k]);
+    }
+    return el;
+  }
+  function fmtPct(x, dp) {
+    if (x == null || isNaN(x)) return "—";
+    return (100 * x).toFixed(dp == null ? 1 : dp) + "%";
+  }
+  function fmtInt(x) { return x == null ? "—" : Number(x).toLocaleString("en-US"); }
+  function niceMax(v) {
+    if (!v || v <= 0) return 1;
+    var mag = Math.pow(10, Math.floor(Math.log10(v)));
+    var n = v / mag;
+    var f = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+    return f * mag;
+  }
+  function monthLabel(ym) {
+    var names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return names[parseInt(ym.slice(5, 7), 10) - 1] + " ’" + ym.slice(2, 4);
+  }
+
+  var OUTCOME_SERIES = [
+    { key: "dismissed", label: "Dismissed", color: "var(--s1)" },
+    { key: "sustained", label: "Sustained (win)", color: "var(--s2)" },
+    { key: "remanded", label: "Remanded", color: "var(--s3)" },
+    { key: "other", label: "Other / unknown", color: "var(--s4)" }
+  ];
+  var OUTCOME_COLOR = {
+    dismissed: "var(--s1)", sustained: "var(--s2)", remanded: "var(--s3)",
+    dismissed_in_part: "var(--s4)", rejected: "var(--s4)", withdrawn: "var(--s4)", unknown: "var(--s4)"
+  };
+  var OUTCOME_LABEL = {
+    dismissed: "Dismissed", sustained: "Sustained", remanded: "Remanded",
+    dismissed_in_part: "Dismissed in part", rejected: "Rejected", withdrawn: "Withdrawn", unknown: "Unknown"
+  };
+  var TYPE_LABEL = {
+    appeal: "Appeal", motion_reopen: "Motion to reopen", motion_reconsider: "Motion to reconsider",
+    motion_combined: "Combined motions", unknown: "Unknown"
+  };
+  var CRIT_SHORT = {
+    awards: "Awards & prizes", membership: "Memberships", published_material: "Published material",
+    judging: "Judging", original_contributions: "Original contributions", scholarly_articles: "Scholarly articles",
+    artistic_exhibitions: "Artistic exhibitions", leading_critical_role: "Leading/critical role",
+    high_salary: "High salary", commercial_success: "Commercial success"
+  };
+
+  // ---------- tooltip ----------
+  var tip = document.getElementById("tooltip");
+  function showTip(content, x, y) {
+    tip.textContent = "";
+    if (content.title) tip.append(h("div", { class: "tip-title", text: content.title }));
+    (content.rows || []).forEach(function (r) {
+      var row = h("div", { class: "tip-row" });
+      if (r.color) {
+        var key = h("span", { class: "tip-key" });
+        key.style.background = r.color;
+        row.append(key);
+      }
+      row.append(h("span", { class: "tip-label", text: r.label }));
+      row.append(h("span", { class: "tip-value", text: r.value }));
+      tip.append(row);
+    });
+    tip.style.display = "block";
+    var w = tip.offsetWidth, hh = tip.offsetHeight;
+    var px = Math.min(x + 14, window.innerWidth - w - 8);
+    var py = y - hh - 12;
+    if (py < 8) py = y + 16;
+    tip.style.left = px + "px";
+    tip.style.top = py + "px";
+  }
+  function hideTip() { tip.style.display = "none"; }
+  function attachTip(el, getContent) {
+    el.classList.add("mark");
+    el.addEventListener("pointermove", function (e) { showTip(getContent(), e.clientX, e.clientY); });
+    el.addEventListener("pointerleave", hideTip);
+    el.setAttribute("tabindex", "0");
+    el.addEventListener("focus", function () {
+      var r = el.getBoundingClientRect();
+      showTip(getContent(), r.left + r.width / 2, r.top);
+    });
+    el.addEventListener("blur", hideTip);
+  }
+
+  // ---------- shared chart chrome ----------
+  function chartCard(title, ariaLabel, caption) {
+    var body = h("div", { class: "chart-body" });
+    var fig = h("figure", { class: "card" },
+      h("h3", { text: title }),
+      body,
+      h("figcaption", { text: caption }));
+    return { fig: fig, body: body, ariaLabel: ariaLabel };
+  }
+  function noData(body) {
+    body.append(h("div", { class: "no-data", text: "No data yet" }));
+  }
+  function legendRow(items) {
+    var row = h("div", { class: "legend" });
+    items.forEach(function (it) {
+      var sw = h("span", { class: "swatch" });
+      sw.style.background = it.color;
+      row.append(h("span", { class: "item" }, sw, h("span", { text: it.label })));
+    });
+    return row;
+  }
+  function tableTwin(headers, rows) {
+    var d = h("details", { class: "twin" }, h("summary", { text: "View as table" }));
+    var thead = h("thead"), tr = h("tr");
+    headers.forEach(function (head, i) { tr.append(h("th", { class: i > 0 ? "num" : "", text: head })); });
+    thead.append(tr);
+    var tbody = h("tbody");
+    rows.forEach(function (r) {
+      var trr = h("tr");
+      r.forEach(function (cell, i) { trr.append(h("td", { class: i > 0 ? "num" : "", text: String(cell) })); });
+      tbody.append(trr);
+    });
+    d.append(h("table", {}, thead, tbody));
+    return d;
+  }
+  // Rounded top (or right end), square baseline.
+  function roundedBarPath(x, y, w, hgt, r, horizontal) {
+    if (horizontal) {
+      var rr = Math.min(r, w, hgt / 2);
+      return "M" + x + "," + y + " h" + (w - rr) + " a" + rr + "," + rr + " 0 0 1 " + rr + "," + rr +
+        " v" + (hgt - 2 * rr) + " a" + rr + "," + rr + " 0 0 1 " + (-rr) + "," + rr +
+        " h" + (rr - w) + " Z";
+    }
+    var rv = Math.min(r, hgt, w / 2);
+    return "M" + x + "," + (y + hgt) + " v" + (-(hgt - rv)) + " a" + rv + "," + rv + " 0 0 1 " + rv + "," + (-rv) +
+      " h" + (w - 2 * rv) + " a" + rv + "," + rv + " 0 0 1 " + rv + "," + rv +
+      " v" + (hgt - rv) + " Z";
+  }
+  function tickCount(ymax) {
+    // Integer-valued tick steps: niceMax always yields 1/2/5 * 10^k.
+    if (ymax <= 5) return Math.max(1, Math.round(ymax));
+    return ymax % 4 === 0 ? 4 : 5;
+  }
+  function yGrid(svg, m, W, Hgt, ymax, ticks, fmt) {
+    for (var i = 0; i <= ticks; i++) {
+      var val = ymax * i / ticks;
+      var y = m.t + (Hgt - m.t - m.b) * (1 - i / ticks);
+      svg.append(s("line", { x1: m.l, x2: W - m.r, y1: y, y2: y, stroke: i === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+      svg.append(s("text", { x: m.l - 6, y: y + 4, "text-anchor": "end", "font-size": 11, fill: "var(--muted)", text: fmt ? fmt(val) : fmtInt(Math.round(val)) }));
+    }
+  }
+
+  // ---------- chart a: monthly volume (line + area) ----------
+  function monthlyChart() {
+    var card = chartCard("Monthly decision volume",
+      "Line chart of published EB-1A AAO decisions per month",
+      "What this means for you: volume varies a lot month to month, and recent months fill in late — a dip at the end is usually publication lag, not fewer decisions.");
+    var data = A.monthly || [];
+    if (!data.length) { noData(card.body); return card.fig; }
+
+    var W = 720, Hgt = 280, m = { l: 42, r: 18, t: 14, b: 30 };
+    var svg = s("svg", { viewBox: "0 0 " + W + " " + Hgt, role: "img", "aria-label": card.ariaLabel });
+    var ymax = niceMax(Math.max.apply(null, data.map(function (d) { return d.total; })));
+    yGrid(svg, m, W, Hgt, ymax, tickCount(ymax));
+    var xw = (W - m.l - m.r) / Math.max(1, data.length - 1);
+    function X(i) { return data.length === 1 ? (m.l + (W - m.l - m.r) / 2) : m.l + i * xw; }
+    function Y(v) { return m.t + (Hgt - m.t - m.b) * (1 - v / ymax); }
+
+    var step = Math.max(1, Math.ceil(data.length / 8));
+    data.forEach(function (d, i) {
+      if (i % step === 0 || i === data.length - 1) {
+        svg.append(s("text", { x: X(i), y: Hgt - m.b + 18, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)", text: monthLabel(d.month) }));
+      }
+    });
+
+    var line = "", area = "";
+    data.forEach(function (d, i) {
+      var cmd = (i === 0 ? "M" : "L") + X(i).toFixed(1) + "," + Y(d.total).toFixed(1);
+      line += cmd; area += cmd;
+    });
+    area += "L" + X(data.length - 1).toFixed(1) + "," + Y(0) + "L" + X(0).toFixed(1) + "," + Y(0) + "Z";
+    var areaEl = s("path", { d: area, fill: "var(--s1)", "fill-opacity": 0.1, stroke: "none" });
+    var lineEl = s("path", { d: line, fill: "none", stroke: "var(--s1)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" });
+    svg.append(areaEl, lineEl);
+    var last = data[data.length - 1];
+    svg.append(s("circle", { cx: X(data.length - 1), cy: Y(last.total), r: 4.5, fill: "var(--s1)", stroke: "var(--surface)", "stroke-width": 2 }));
+    svg.append(s("text", { x: X(data.length - 1) - 8, y: Y(last.total) - 10, "text-anchor": "end", "font-size": 11, fill: "var(--ink-2)", text: fmtInt(last.total) }));
+
+    var crosshair = s("line", { y1: m.t, y2: Hgt - m.b, stroke: "var(--axis)", "stroke-width": 1, visibility: "hidden" });
+    var dot = s("circle", { r: 4.5, fill: "var(--s1)", stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" });
+    svg.append(crosshair, dot);
+    var overlay = s("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: Hgt - m.t - m.b, fill: "transparent" });
+    svg.append(overlay);
+    function tipFor(i) {
+      var d = data[i];
+      return { title: monthLabel(d.month), rows: [
+        { color: "var(--s1)", label: "Total", value: fmtInt(d.total) },
+        { color: "var(--s1)", label: "Dismissed", value: fmtInt(d.dismissed) },
+        { color: "var(--s2)", label: "Sustained", value: fmtInt(d.sustained) },
+        { color: "var(--s3)", label: "Remanded", value: fmtInt(d.remanded) },
+        { color: "var(--s4)", label: "Other/unknown", value: fmtInt(d.other) }
+      ] };
+    }
+    function moveTo(i, cx, cy) {
+      crosshair.setAttribute("x1", X(i)); crosshair.setAttribute("x2", X(i));
+      crosshair.setAttribute("visibility", "visible");
+      dot.setAttribute("cx", X(i)); dot.setAttribute("cy", Y(data[i].total));
+      dot.setAttribute("visibility", "visible");
+      showTip(tipFor(i), cx, cy);
+    }
+    overlay.addEventListener("pointermove", function (e) {
+      var rect = svg.getBoundingClientRect();
+      var sx = (e.clientX - rect.left) * (W / rect.width);
+      var i = Math.max(0, Math.min(data.length - 1, Math.round((sx - m.l) / (xw || 1))));
+      moveTo(i, e.clientX, e.clientY);
+    });
+    overlay.addEventListener("pointerleave", function () {
+      crosshair.setAttribute("visibility", "hidden");
+      dot.setAttribute("visibility", "hidden");
+      hideTip();
+    });
+    overlay.setAttribute("tabindex", "0");
+    overlay.addEventListener("focus", function () {
+      var r = svg.getBoundingClientRect();
+      moveTo(data.length - 1, r.right - 60, r.top + 40);
+    });
+    overlay.addEventListener("blur", function () {
+      crosshair.setAttribute("visibility", "hidden");
+      dot.setAttribute("visibility", "hidden");
+      hideTip();
+    });
+
+    card.body.append(svg);
+    card.body.append(tableTwin(["Month", "Total", "Dismissed", "Sustained", "Remanded", "Other"],
+      data.map(function (d) { return [d.month, d.total, d.dismissed, d.sustained, d.remanded, d.other]; })));
+    return card.fig;
+  }
+
+  // ---------- chart b: yearly outcome shares (stacked bars) ----------
+  function yearlyChart() {
+    var card = chartCard("Outcome shares by year",
+      "Stacked bar chart of decision outcome shares per year",
+      "What this means for you: the share of appeals that succeed is small and fairly stable year over year — a big swing usually means a small sample, not a policy change.");
+    var data = (A.yearly_outcomes || []).filter(function (y) { return y.rates && y.rates.dismissed != null; });
+    if (!data.length) { noData(card.body); return card.fig; }
+
+    var W = 720, Hgt = 280, m = { l: 46, r: 18, t: 14, b: 30 };
+    var svg = s("svg", { viewBox: "0 0 " + W + " " + Hgt, role: "img", "aria-label": card.ariaLabel });
+    yGrid(svg, m, W, Hgt, 1, 4, function (v) { return Math.round(v * 100) + "%"; });
+    var slot = (W - m.l - m.r) / data.length;
+    var barW = Math.min(24, slot * 0.5);
+    var plotH = Hgt - m.t - m.b;
+    data.forEach(function (yr, i) {
+      var cx = m.l + slot * (i + 0.5);
+      var x = cx - barW / 2;
+      var yCursor = Hgt - m.b;
+      var segs = OUTCOME_SERIES.map(function (sd) { return { sd: sd, v: yr.rates[sd.key] || 0 }; })
+        .filter(function (g) { return g.v > 0; });
+      segs.forEach(function (g, si) {
+        var hpx = g.v * plotH;
+        var gap = si === 0 ? 0 : 2;
+        var topSeg = si === segs.length - 1;
+        var y = yCursor - hpx;
+        var drawY = y, drawH = Math.max(0.5, hpx - gap); // gap sits between this segment's base and the one below
+        var el = topSeg
+          ? s("path", { d: roundedBarPath(x, drawY, barW, drawH, 4, false), fill: g.sd.color })
+          : s("rect", { x: x, y: drawY, width: barW, height: drawH, fill: g.sd.color });
+        attachTip(el, function () {
+          return { title: String(yr.year) + " · " + fmtInt(yr.total) + " cases", rows: [
+            { color: g.sd.color, label: g.sd.label, value: fmtPct(g.v) }
+          ] };
+        });
+        svg.append(el);
+        yCursor = y;
+      });
+      svg.append(s("text", { x: cx, y: Hgt - m.b + 18, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)", text: String(yr.year) }));
+    });
+    card.body.append(legendRow(OUTCOME_SERIES));
+    card.body.append(svg);
+    card.body.append(tableTwin(["Year", "Cases", "Dismissed", "Sustained", "Remanded", "Other"],
+      data.map(function (yr) {
+        return [yr.year, yr.total, fmtPct(yr.rates.dismissed), fmtPct(yr.rates.sustained), fmtPct(yr.rates.remanded), fmtPct(yr.rates.other)];
+      })));
+    return card.fig;
+  }
+
+  // ---------- chart c: criteria met-rate (horizontal bars) ----------
+  function criteriaChart() {
+    var card = chartCard("How often each criterion is counted as met",
+      "Horizontal bar chart of the met rate for each of the ten EB-1A criteria",
+      "What this means for you: rates only count cases where the AAO explicitly ruled on that criterion — a high bar means the criterion holds up when argued, not that it is easy.");
+    var data = (A.criteria || []).slice().sort(function (a, b) {
+      var ar = a.met_rate == null ? -1 : a.met_rate;
+      var br = b.met_rate == null ? -1 : b.met_rate;
+      return br - ar || b.met - a.met || a.key.localeCompare(b.key);
+    });
+    if (!data.length) { noData(card.body); return card.fig; }
+
+    var rowH = 30, m = { l: 168, r: 96, t: 8, b: 26 };
+    var W = 720, Hgt = m.t + rowH * data.length + m.b;
+    var svg = s("svg", { viewBox: "0 0 " + W + " " + Hgt, role: "img", "aria-label": card.ariaLabel });
+    var plotW = W - m.l - m.r;
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (t) {
+      var x = m.l + plotW * t;
+      svg.append(s("line", { x1: x, x2: x, y1: m.t, y2: Hgt - m.b, stroke: t === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+      svg.append(s("text", { x: x, y: Hgt - m.b + 16, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)", text: Math.round(t * 100) + "%" }));
+    });
+    data.forEach(function (c, i) {
+      var y = m.t + rowH * i + (rowH - 18) / 2;
+      svg.append(s("text", { x: m.l - 8, y: y + 13, "text-anchor": "end", "font-size": 11.5, fill: "var(--ink-2)", text: CRIT_SHORT[c.key] || c.label }));
+      var ruled = c.met + c.not_met;
+      if (c.met_rate == null) {
+        svg.append(s("text", { x: m.l + 6, y: y + 13, "font-size": 11, fill: "var(--muted)", text: "no explicit rulings yet" }));
+        return;
+      }
+      var w = Math.max(1, plotW * c.met_rate);
+      var bar = s("path", { d: roundedBarPath(m.l, y, w, 18, 4, true), fill: "var(--s1)" });
+      attachTip(bar, function () {
+        return { title: c.label + " — 8 CFR " + c.cfr, rows: [
+          { color: "var(--s1)", label: "Met rate (when ruled on)", value: fmtPct(c.met_rate) },
+          { label: "Met / not met", value: fmtInt(c.met) + " / " + fmtInt(c.not_met) },
+          { label: "Discussed in", value: fmtInt(c.discussed) + " cases" },
+          { label: "Met rate in winning cases", value: fmtPct(c.met_rate_in_favorable) }
+        ] };
+      });
+      svg.append(bar);
+      svg.append(s("text", { x: m.l + w + 6, y: y + 13, "font-size": 11, fill: "var(--ink-2)", text: fmtPct(c.met_rate, 0) + " (" + c.met + "/" + ruled + ")" }));
+    });
+    card.body.append(svg);
+    card.body.append(tableTwin(["Criterion (8 CFR)", "Discussed", "Met", "Not met", "Met rate"],
+      data.map(function (c) { return [c.label + " (" + c.cfr + ")", c.discussed, c.met, c.not_met, fmtPct(c.met_rate)]; })));
+    return card.fig;
+  }
+
+  // ---------- chart d: criteria-met-count distribution ----------
+  function distributionChart() {
+    var card = chartCard("How many criteria the AAO credits",
+      "Bar chart of cases by number of criteria counted as met, with favorable outcomes overlaid",
+      "What this means for you: you need at least 3 criteria — and favorable outcomes cluster where the AAO credited 3 or more, though meeting 3 alone does not guarantee a win.");
+    var raw = A.criteria_met_distribution || [];
+    if (!raw.length) { noData(card.body); return card.fig; }
+    var maxCount = Math.max.apply(null, raw.map(function (d) { return d.met_count; }));
+    var byN = {};
+    raw.forEach(function (d) { byN[d.met_count] = d; });
+    var data = [];
+    for (var n = 0; n <= maxCount; n++) data.push(byN[n] || { met_count: n, cases: 0, favorable: 0 });
+
+    var W = 720, Hgt = 280, m = { l: 42, r: 18, t: 14, b: 42 };
+    var svg = s("svg", { viewBox: "0 0 " + W + " " + Hgt, role: "img", "aria-label": card.ariaLabel });
+    var ymax = niceMax(Math.max.apply(null, data.map(function (d) { return d.cases; })));
+    yGrid(svg, m, W, Hgt, ymax, tickCount(ymax));
+    var slot = (W - m.l - m.r) / data.length;
+    var barW = Math.min(24, slot * 0.55);
+    var plotH = Hgt - m.t - m.b;
+    data.forEach(function (d, i) {
+      var cx = m.l + slot * (i + 0.5);
+      var y0 = Hgt - m.b;
+      if (d.cases > 0) {
+        var hAll = plotH * d.cases / ymax;
+        var barAll = s("path", { d: roundedBarPath(cx - barW / 2, y0 - hAll, barW, hAll, 4, false), fill: "var(--s1)" });
+        attachTip(barAll, function () {
+          return { title: d.met_count + " criteria met", rows: [
+            { color: "var(--s1)", label: "All cases", value: fmtInt(d.cases) },
+            { color: "var(--s3)", label: "Favorable", value: fmtInt(d.favorable) }
+          ] };
+        });
+        svg.append(barAll);
+      }
+      if (d.favorable > 0) {
+        var hFav = plotH * d.favorable / ymax;
+        svg.append(s("path", {
+          d: roundedBarPath(cx - barW / 4, y0 - hFav, barW / 2, hFav, 3, false),
+          fill: "var(--s3)", stroke: "var(--surface)", "stroke-width": 2, "pointer-events": "none"
+        }));
+      }
+      svg.append(s("text", { x: cx, y: Hgt - m.b + 18, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)", text: String(d.met_count) }));
+    });
+    svg.append(s("text", { x: (m.l + W - m.r) / 2, y: Hgt - 6, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)", text: "criteria counted as met" }));
+    card.body.append(legendRow([
+      { label: "All cases", color: "var(--s1)" },
+      { label: "Favorable outcome", color: "var(--s3)" }
+    ]));
+    card.body.append(svg);
+    card.body.append(tableTwin(["Criteria met", "Cases", "Favorable"],
+      data.map(function (d) { return [d.met_count, d.cases, d.favorable]; })));
+    return card.fig;
+  }
+
+  // ---------- chart e: appeals vs motions (grouped bars) ----------
+  function caseTypeChart() {
+    var card = chartCard("Appeals vs. motions",
+      "Grouped bar chart of outcomes by filing type",
+      "What this means for you: appeals and motions are different tools — motions ask the same office to change its mind and succeed even less often than appeals.");
+    var data = A.case_type_outcomes || [];
+    if (!data.length) { noData(card.body); return card.fig; }
+    function folded(ct) {
+      var oc = ct.outcomes || {};
+      var out = { dismissed: oc.dismissed || 0, sustained: oc.sustained || 0, remanded: oc.remanded || 0, other: 0 };
+      for (var k in oc) if (!(k in out)) out.other += oc[k];
+      return out;
+    }
+    var W = 720, Hgt = 280, m = { l: 42, r: 18, t: 14, b: 34 };
+    var svg = s("svg", { viewBox: "0 0 " + W + " " + Hgt, role: "img", "aria-label": card.ariaLabel });
+    var ymax = niceMax(Math.max.apply(null, data.map(function (ct) {
+      var f = folded(ct);
+      return Math.max(f.dismissed, f.sustained, f.remanded, f.other);
+    })));
+    yGrid(svg, m, W, Hgt, ymax, tickCount(ymax));
+    var slot = (W - m.l - m.r) / data.length;
+    var barW = Math.min(24, (slot * 0.7 - 3 * 2) / 4);
+    var plotH = Hgt - m.t - m.b;
+    data.forEach(function (ct, i) {
+      var f = folded(ct);
+      var groupW = 4 * barW + 3 * 2;
+      var x0 = m.l + slot * (i + 0.5) - groupW / 2;
+      OUTCOME_SERIES.forEach(function (sd, si) {
+        var v = f[sd.key];
+        if (v <= 0) return;
+        var hb = plotH * v / ymax;
+        var x = x0 + si * (barW + 2);
+        var bar = s("path", { d: roundedBarPath(x, Hgt - m.b - hb, barW, hb, 4, false), fill: sd.color });
+        attachTip(bar, function () {
+          return { title: (TYPE_LABEL[ct.case_type] || ct.case_type) + " · " + fmtInt(ct.total) + " cases", rows: [
+            { color: sd.color, label: sd.label, value: fmtInt(v) }
+          ] };
+        });
+        svg.append(bar);
+      });
+      svg.append(s("text", { x: m.l + slot * (i + 0.5), y: Hgt - m.b + 18, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)", text: TYPE_LABEL[ct.case_type] || ct.case_type }));
+    });
+    card.body.append(legendRow(OUTCOME_SERIES));
+    card.body.append(svg);
+    card.body.append(tableTwin(["Filing type", "Total", "Dismissed", "Sustained", "Remanded", "Other/unknown"],
+      data.map(function (ct) {
+        var f = folded(ct);
+        return [TYPE_LABEL[ct.case_type] || ct.case_type, ct.total, f.dismissed, f.sustained, f.remanded, f.other];
+      })));
+    return card.fig;
+  }
+
+  // ---------- chart f: publication lag histogram ----------
+  function lagChart() {
+    var card = chartCard("How long until decisions are published",
+      "Histogram of days between decision date and public listing",
+      "What this means for you: most decisions reach the public reading room within a month or two, so treat the latest month or two of every chart as incomplete.");
+    var data = A.lag_histogram || [];
+    var total = data.reduce(function (acc, d) { return acc + d.count; }, 0);
+    if (!data.length || total === 0) { noData(card.body); return card.fig; }
+
+    var W = 720, Hgt = 260, m = { l: 42, r: 18, t: 14, b: 44 };
+    var svg = s("svg", { viewBox: "0 0 " + W + " " + Hgt, role: "img", "aria-label": card.ariaLabel });
+    var ymax = niceMax(Math.max.apply(null, data.map(function (d) { return d.count; })));
+    yGrid(svg, m, W, Hgt, ymax, tickCount(ymax));
+    var slot = (W - m.l - m.r) / data.length;
+    var barW = Math.min(24, slot * 0.5);
+    var plotH = Hgt - m.t - m.b;
+    data.forEach(function (d, i) {
+      var cx = m.l + slot * (i + 0.5);
+      if (d.count > 0) {
+        var hb = plotH * d.count / ymax;
+        var bar = s("path", { d: roundedBarPath(cx - barW / 2, Hgt - m.b - hb, barW, hb, 4, false), fill: "var(--s1)" });
+        attachTip(bar, function () {
+          return { title: d.bucket + " days", rows: [{ color: "var(--s1)", label: "Decisions", value: fmtInt(d.count) }] };
+        });
+        svg.append(bar);
+      }
+      svg.append(s("text", { x: cx, y: Hgt - m.b + 18, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)", text: d.bucket }));
+    });
+    svg.append(s("text", { x: (m.l + W - m.r) / 2, y: Hgt - 8, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)", text: "days from decision to public listing" }));
+    card.body.append(svg);
+    card.body.append(tableTwin(["Days", "Decisions"], data.map(function (d) { return [d.bucket, d.count]; })));
+    return card.fig;
+  }
+
+  // ---------- header tiles ----------
+  function renderTiles() {
+    var tiles = document.getElementById("tiles");
+    function tile(label, value, note) {
+      var t = h("div", { class: "tile" },
+        h("div", { class: "label", text: label }),
+        h("div", { class: "value", text: value }));
+      if (note) t.append(h("div", { class: "note", text: note }));
+      return t;
+    }
+    var known = (COV.total_cases || 0) - (COV.unknown_outcome || 0);
+    tiles.append(
+      tile("Decisions analyzed", fmtInt(COV.total_cases || 0), COV.unknown_outcome ? fmtInt(COV.unknown_outcome) + " with unknown outcome" : null),
+      tile("Sustain rate", fmtPct(HEAD.sustain_rate), "of " + fmtInt(known) + " known outcomes"),
+      tile("Favorable rate", fmtPct(HEAD.favorable_rate), "sustained or remanded"),
+      tile("Coverage", COV.start && COV.end ? COV.start + " – " + COV.end : "—", "decision dates"),
+      tile("Last updated", (A.generated_at || "").slice(0, 10) || "—", null)
+    );
+  }
+
+  // ---------- takeaways ----------
+  function renderTakeaways() {
+    var ul = document.getElementById("takeaways");
+    var items = A.takeaways || [];
+    if (!items.length) {
+      ul.append(h("li", { text: "Not enough data yet to draw conclusions." }));
+      return;
+    }
+    items.forEach(function (t) { ul.append(h("li", { text: t })); });
+  }
+
+  // ---------- QA numbers ----------
+  function renderQA() {
+    var qa = A.qa || {};
+    document.getElementById("qa-unknown").textContent =
+      fmtInt(COV.unknown_outcome || 0) + " (" + fmtPct(qa.outcome_unknown_rate) + " of all cases)";
+    document.getElementById("qa-flags").textContent = fmtInt(qa.extraction_error_count || 0);
+    document.getElementById("qa-lowconf").textContent = fmtInt(qa.low_confidence_count || 0);
+  }
+
+  // ---------- case explorer ----------
+  var PAGE_SIZE = 100;
+  var state = { q: "", outcome: "all", type: "all", year: "all", minMet: 0, sortKey: "d", sortDir: -1, page: 0 };
+
+  function caseMatches(c) {
+    if (state.q && (c.id || "").toLowerCase().indexOf(state.q) === -1) return false;
+    if (state.outcome !== "all" && c.o !== state.outcome) return false;
+    if (state.type !== "all" && c.t !== state.type) return false;
+    if (state.year !== "all" && (c.d || "").slice(0, 4) !== state.year) return false;
+    if ((c.n || 0) < state.minMet) return false;
+    return true;
+  }
+  function sortCases(list) {
+    var key = state.sortKey, dir = state.sortDir;
+    return list.slice().sort(function (a, b) {
+      var av, bv;
+      if (key === "d") { av = a.d || ""; bv = b.d || ""; }
+      else if (key === "o") { av = a.o || ""; bv = b.o || ""; }
+      else { av = a.n || 0; bv = b.n || 0; }
+      if (av < bv) return -dir;
+      if (av > bv) return dir;
+      return (a.id || "") < (b.id || "") ? -1 : 1;
+    });
+  }
+  function buildControls() {
+    var wrap = document.getElementById("case-controls");
+    var search = h("input", { type: "search", placeholder: "Search case ID…", "aria-label": "Search by case ID" });
+    search.addEventListener("input", function () { state.q = search.value.trim().toLowerCase(); state.page = 0; renderTable(); });
+
+    function sel(label, options, onChange) {
+      var el = h("select", { "aria-label": label });
+      options.forEach(function (o) { el.append(h("option", { value: o[0], text: o[1] })); });
+      el.addEventListener("change", function () { onChange(el.value); state.page = 0; renderTable(); });
+      return el;
+    }
+    var outcomes = [["all", "All outcomes"]];
+    var seenO = {};
+    C.forEach(function (c) { if (!seenO[c.o]) { seenO[c.o] = 1; outcomes.push([c.o, OUTCOME_LABEL[c.o] || c.o]); } });
+    var types = [["all", "All types"]];
+    var seenT = {};
+    C.forEach(function (c) { if (!seenT[c.t]) { seenT[c.t] = 1; types.push([c.t, TYPE_LABEL[c.t] || c.t]); } });
+    var years = [["all", "All years"]];
+    var seenY = {};
+    C.forEach(function (c) {
+      var y = (c.d || "").slice(0, 4);
+      if (y && !seenY[y]) { seenY[y] = 1; years.push([y, y]); }
+    });
+    years = [years[0]].concat(years.slice(1).sort(function (a, b) { return b[0] < a[0] ? -1 : 1; }));
+    var mins = [[0, "Any criteria met"], [1, "≥ 1 met"], [2, "≥ 2 met"], [3, "≥ 3 met"], [4, "≥ 4 met"], [5, "≥ 5 met"]]
+      .map(function (o) { return [String(o[0]), o[1]]; });
+
+    wrap.append(
+      search,
+      sel("Filter by outcome", outcomes, function (v) { state.outcome = v; }),
+      sel("Filter by filing type", types, function (v) { state.type = v; }),
+      sel("Filter by year", years, function (v) { state.year = v; }),
+      sel("Minimum criteria met", mins, function (v) { state.minMet = parseInt(v, 10) || 0; })
+    );
+  }
+  function headerCell(label, key) {
+    var th = h("th", { text: label });
+    if (key) {
+      th.classList.add("sortable");
+      th.setAttribute("role", "button");
+      th.setAttribute("tabindex", "0");
+      var active = state.sortKey === key;
+      th.textContent = label + (active ? (state.sortDir === -1 ? " ▾" : " ▴") : "");
+      th.setAttribute("aria-sort", active ? (state.sortDir === -1 ? "descending" : "ascending") : "none");
+      function toggle() {
+        if (state.sortKey === key) state.sortDir = -state.sortDir;
+        else { state.sortKey = key; state.sortDir = -1; }
+        state.page = 0;
+        renderTable();
+      }
+      th.addEventListener("click", toggle);
+      th.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+    }
+    return th;
+  }
+  function renderTable() {
+    var table = document.getElementById("case-table");
+    table.textContent = "";
+    var thead = h("thead"), tr = h("tr");
+    tr.append(
+      headerCell("Date", "d"),
+      headerCell("Case ID", null),
+      headerCell("Type", null),
+      headerCell("Outcome", "o"),
+      headerCell("Criteria met", "n")
+    );
+    thead.append(tr);
+    table.append(thead);
+
+    var filtered = sortCases(C.filter(caseMatches));
+    var pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if (state.page >= pages) state.page = pages - 1;
+    var pageRows = filtered.slice(state.page * PAGE_SIZE, (state.page + 1) * PAGE_SIZE);
+
+    var tbody = h("tbody");
+    if (!pageRows.length) {
+      tbody.append(h("tr", {}, h("td", { colspan: "5", class: "no-data", text: "No cases match these filters." })));
+    }
+    pageRows.forEach(function (c) {
+      var idCell;
+      if (c.u && c.u.indexOf("https://www.uscis.gov/") === 0) {
+        idCell = h("a", { href: c.u, target: "_blank", rel: "noopener noreferrer", text: c.id || "—" });
+      } else {
+        idCell = h("span", { text: c.id || "—" });
+      }
+      var badge = h("span", { class: "badge" });
+      var dotEl = h("span", { class: "dot" });
+      dotEl.style.background = OUTCOME_COLOR[c.o] || "var(--muted)";
+      badge.append(dotEl, h("span", { text: OUTCOME_LABEL[c.o] || c.o }));
+      var met = h("td", { class: "metcount" }, h("span", { text: String(c.n || 0) + " " }));
+      (c.m || []).forEach(function (k) { met.append(h("span", { class: "chip", text: CRIT_SHORT[k] || k })); });
+      tbody.append(h("tr", {},
+        h("td", { class: "date", text: c.d || "—" }),
+        h("td", {}, idCell),
+        h("td", { text: TYPE_LABEL[c.t] || c.t || "—" }),
+        h("td", {}, badge),
+        met
+      ));
+    });
+    table.append(tbody);
+
+    var pager = document.getElementById("case-pager");
+    pager.textContent = "";
+    var prev = h("button", { type: "button", text: "← Prev" });
+    var next = h("button", { type: "button", text: "Next →" });
+    prev.disabled = state.page === 0;
+    next.disabled = state.page >= pages - 1;
+    prev.addEventListener("click", function () { if (state.page > 0) { state.page--; renderTable(); } });
+    next.addEventListener("click", function () { if (state.page < pages - 1) { state.page++; renderTable(); } });
+    var lo = filtered.length ? state.page * PAGE_SIZE + 1 : 0;
+    var hi = Math.min(filtered.length, (state.page + 1) * PAGE_SIZE);
+    pager.append(prev, h("span", { text: "Showing " + fmtInt(lo) + "–" + fmtInt(hi) + " of " + fmtInt(filtered.length) + " cases" }), next);
+  }
+
+  // ---------- boot ----------
+  renderTiles();
+  var chartsRoot = document.getElementById("charts");
+  chartsRoot.append(monthlyChart(), yearlyChart(), criteriaChart(), distributionChart(), caseTypeChart(), lagChart());
+  renderTakeaways();
+  renderQA();
+  buildControls();
+  renderTable();
+})();
+</script>
+</body>
+</html>

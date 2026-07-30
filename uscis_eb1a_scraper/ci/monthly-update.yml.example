@@ -1,0 +1,91 @@
+# Monthly AAO EB-1A data update — GitHub Actions workflow (EXAMPLE / OPT-IN).
+#
+# This file is intentionally shipped as an .example and NOT installed under
+# .github/workflows/: the repository-root .github directory is shared with
+# another project, so enabling this automation is a deliberate opt-in.
+#
+# To enable, copy it into the repo-root workflows directory:
+#
+#     mkdir -p .github/workflows
+#     cp uscis_eb1a_scraper/ci/monthly-update.yml.example \
+#        .github/workflows/uscis-monthly-update.yml
+#     git add .github/workflows/uscis-monthly-update.yml && git commit && git push
+#
+# What it does: once a month (and on manual dispatch) it runs the incremental
+# `update` pipeline — scrape the trailing listing window, download new PDFs,
+# extract new cases, regenerate analytics + dashboard — then commits the
+# durable outputs (data/*.jsonl, data/*.json, dashboard/index.html) back to
+# the repository. Raw PDFs and extracted text are gitignored and are NOT
+# committed; they are re-derivable from the manifest.
+#
+# GitHub-hosted runners have unrestricted egress to www.uscis.gov, so no
+# proxy/allowlist configuration is needed here. The scraper already sends a
+# browser User-Agent and rate-limits itself (1.5 s between requests).
+
+name: "Monthly AAO EB-1A update"
+
+on:
+  # Run at 09:00 UTC on the 3rd of every month. USCIS posts decisions within
+  # roughly a month of issuance and backfills, and `update` re-scans a trailing
+  # 4-month window, so an early-month run reliably picks up the new batch.
+  schedule:
+    - cron: "0 9 3 * *"
+  # Allow manual runs from the Actions tab (useful for the first backfill run
+  # and for ad-hoc refreshes).
+  workflow_dispatch:
+
+# The job pushes a data commit back to the repository, so it needs write
+# access to repo contents. GITHUB_TOKEN gets this scope automatically.
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the repository, including data/manifest.jsonl — the state
+      # file the incremental update diffs against.
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Install uv (Python package/environment manager). It reads
+      # uscis_eb1a_scraper/pyproject.toml + uv.lock and provisions Python.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # Install the project's locked dependencies into a fresh virtualenv.
+      - name: Sync dependencies
+        working-directory: uscis_eb1a_scraper
+        run: uv sync
+
+      # Run the incremental monthly update.
+      #
+      # Exit codes: 0 = full success; 2 = completed with per-item failures
+      # (e.g. one PDF 404'd) — those heal on the next run, so we treat 2 as
+      # success and still commit the partial progress. Exit 3 (network
+      # unreachable) and 1 (fatal) correctly fail the job.
+      - name: Run incremental update
+        working-directory: uscis_eb1a_scraper
+        run: uv run python -m uscis_eb1a_scraper update -v || [ $? -eq 2 ]
+
+      # Identify the bot for the data commit.
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # Stage only the durable, committed outputs (manifest, case records,
+      # analytics, QA report, dashboard). PDFs/text stay out of git.
+      # Commit only if something actually changed (quiet months produce no
+      # diff), then push back to the branch the workflow ran on.
+      - name: Commit and push data updates
+        run: |
+          git add uscis_eb1a_scraper/data/*.jsonl \
+                  uscis_eb1a_scraper/data/*.json \
+                  uscis_eb1a_scraper/dashboard/index.html
+          if git diff --cached --quiet; then
+            echo "No data changes this run; nothing to commit."
+          else
+            git commit -m "chore: monthly AAO EB-1A data update"
+            git push
+          fi

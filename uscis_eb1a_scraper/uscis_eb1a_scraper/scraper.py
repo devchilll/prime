@@ -15,7 +15,6 @@ Typical usage::
 from __future__ import annotations
 
 import logging
-import os
 from typing import Iterable, List, Optional, Tuple
 from urllib.parse import urlencode
 
@@ -120,22 +119,6 @@ class AAOScraper:
                 seen.add(decision.url)
                 out.append(decision)
         return out
-
-    def download(self, decision: Decision, out_dir: str) -> str:
-        """Download a decision PDF into *out_dir*; return the local path.
-
-        Skips the download if the file already exists.
-        """
-        os.makedirs(out_dir, exist_ok=True)
-        dest = os.path.join(out_dir, decision.filename)
-        if os.path.exists(dest) and os.path.getsize(dest) > 0:
-            logger.info("Already downloaded: %s", dest)
-            return dest
-        logger.info("Downloading %s -> %s", decision.url, dest)
-        content = self.client.get_bytes(decision.url)
-        with open(dest, "wb") as fh:
-            fh.write(content)
-        return dest
 
     def close(self) -> None:
         self.client.close()
